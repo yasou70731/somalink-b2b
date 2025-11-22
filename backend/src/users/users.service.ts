@@ -1,7 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User, UserRole } from './entities/user.entity'; // ✨ 引入 UserRole
+import { User, UserRole } from './entities/user.entity';
 import { DealerProfile, DealerLevel, TradeType } from './entities/dealer-profile.entity';
 import { TradeCategory } from './entities/trade-category.entity';
 
@@ -14,6 +14,7 @@ export class UsersService {
     private categoryRepository: Repository<TradeCategory>,
   ) {}
 
+  // 1. 查 Email (登入用)
   async findOneByEmail(email: string): Promise<User | null> {
     return this.usersRepository.findOne({ 
       where: { email },
@@ -21,9 +22,12 @@ export class UsersService {
     });
   }
 
+  // 2. 註冊新帳號
   async create(createUserDto: any) {
     const existingUser = await this.findOneByEmail(createUserDto.email);
-    if (existingUser) throw new BadRequestException('此 Email 已經註冊過');
+    if (existingUser) {
+      throw new BadRequestException('此 Email 已經註冊過');
+    }
 
     const profile = new DealerProfile();
     profile.companyName = createUserDto.companyName || '未命名公司';
@@ -36,6 +40,7 @@ export class UsersService {
     profile.tradeType = inputTradeType;
 
     const category = await this.categoryRepository.findOneBy({ code: inputTradeType });
+
     if (category) {
       profile.isUpgradeable = category.isUpgradeable;
     } else {
@@ -49,11 +54,13 @@ export class UsersService {
     const user = new User();
     user.email = createUserDto.email;
     user.password = createUserDto.password; 
+    user.isActive = false; // 預設未啟用
     user.dealerProfile = profile;
 
     return this.usersRepository.save(user);
   }
 
+  // 3. 查詢所有使用者
   findAll() {
     return this.usersRepository.find({
       relations: ['dealerProfile'],
@@ -61,6 +68,26 @@ export class UsersService {
     });
   }
 
+  // 4. 切換啟用狀態
+  async toggleActive(userId: string, isActive: boolean) {
+    await this.usersRepository.update(userId, { isActive });
+    return this.usersRepository.findOne({ where: { id: userId }, relations: ['dealerProfile'] });
+  }
+
+  // 5. 修改等級
+  async updateLevel(userId: string, level: DealerLevel) {
+    const user = await this.usersRepository.findOne({ 
+      where: { id: userId },
+      relations: ['dealerProfile'] 
+    });
+
+    if (!user || !user.dealerProfile) throw new Error('找不到使用者');
+
+    user.dealerProfile.level = level;
+    return this.usersRepository.save(user);
+  }
+
+  // 6. 錢包儲值
   async deposit(userId: string, amount: number) {
     const user = await this.usersRepository.findOne({ 
       where: { id: userId },
@@ -72,15 +99,35 @@ export class UsersService {
     const profile = user.dealerProfile;
     const level = profile.level;
 
-    const LIMITS = { 'A': 200000, 'B': 100000, 'C': 0 };
+    const LIMITS = {
+      'A': 200000,
+      'B': 100000,
+      'C': 0 
+    };
+
     const limit = (LIMITS as any)[level] || 0;
 
-    if (amount > limit) throw new Error(`儲值失敗：${level} 級經銷商單筆上限為 $${limit.toLocaleString()}`);
+    if (amount > limit) {
+      throw new Error(`儲值失敗：${level} 級經銷商單筆上限為 $${limit.toLocaleString()}`);
+    }
 
-    profile.walletBalance = Number(profile.walletBalance) + Number(amount);
+    const currentBalance = Number(profile.walletBalance);
+    const addAmount = Number(amount);
+    profile.walletBalance = currentBalance + addAmount;
+
     return this.usersRepository.save(user);
   }
 
+  // 7. 刪除使用者
+  async remove(id: string) {
+    const user = await this.usersRepository.findOne({ where: { id } });
+    if (!user) {
+      throw new Error('找不到使用者');
+    }
+    return this.usersRepository.remove(user);
+  }
+
+  // 8. 初始化分類
   async initCategories() {
     const defaults = [
       { name: '專業玻璃行', code: 'glass', isUpgradeable: true },
@@ -98,12 +145,13 @@ export class UsersService {
     }
   }
 
-  // ✨ 秘密武器：強制升級管理員
+  // 9. 升級管理員
   async makeAdmin(email: string) {
     const user = await this.findOneByEmail(email);
     if (!user) throw new Error(`找不到 Email 為 ${email} 的帳號`);
     
-    user.role = UserRole.ADMIN; // 強制設為 Admin
+    user.role = UserRole.ADMIN; 
+    user.isActive = true; 
     return this.usersRepository.save(user);
   }
 }
