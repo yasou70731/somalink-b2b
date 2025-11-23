@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Trash2, ArrowRight, Loader2, ShoppingBag, AlertCircle } from 'lucide-react';
+import { Trash2, ArrowRight, Loader2, ShoppingBag, AlertCircle, Hammer, Package, MessageSquare } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { api } from '@/lib/api';
 
@@ -11,11 +11,16 @@ export default function CartPage() {
   const router = useRouter();
   const { items, removeFromCart, clearCart, cartTotal } = useCart();
   
+  // 解決 Hydration Mismatch 問題
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   const [projectName, setProjectName] = useState('');
+  // ✨ 新增：訂單備註狀態
+  const [customerNote, setCustomerNote] = useState(''); 
   const [agreed, setAgreed] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 處理結帳送出
   const handleSubmit = async () => {
     if (!projectName.trim()) {
       alert('請輸入案場名稱 (例如：台北帝寶 A 棟)');
@@ -29,9 +34,9 @@ export default function CartPage() {
     setIsSubmitting(true);
 
     try {
-      // 組裝符合後端 CreateOrderDto 的 Payload
       const payload = {
         projectName: projectName,
+        customerNote: customerNote, // ✨ 傳送備註給後端
         agreedToDisclaimer: agreed,
         items: items.map(item => ({
           productId: item.productId,
@@ -52,10 +57,9 @@ export default function CartPage() {
 
       await api.post('/orders', payload);
       
-      // 成功後清空購物車並跳轉
       clearCart();
       alert('🚀 訂單已送出！');
-      router.push('/orders'); // 跳轉到歷史訂單頁
+      router.push('/orders');
 
     } catch (error: any) {
       console.error(error);
@@ -70,7 +74,8 @@ export default function CartPage() {
     }
   };
 
-  // --- 空購物車狀態 ---
+  if (!mounted) return null;
+
   if (items.length === 0) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center p-8 text-center">
@@ -86,7 +91,6 @@ export default function CartPage() {
     );
   }
 
-  // --- 有商品的狀態 ---
   return (
     <div className="min-h-screen bg-gray-50 py-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -99,7 +103,6 @@ export default function CartPage() {
             {items.map((item) => (
               <div key={item.internalId} className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm flex flex-col sm:flex-row gap-6 relative group">
                 
-                {/* 刪除按鈕 */}
                 <button 
                   onClick={() => removeFromCart(item.internalId)}
                   className="absolute top-4 right-4 p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
@@ -107,15 +110,26 @@ export default function CartPage() {
                   <Trash2 className="w-5 h-5" />
                 </button>
 
-                {/* 商品圖片 (已修正 shrink-0) */}
                 <div className="w-24 h-24 bg-gray-100 rounded-xl shrink-0 overflow-hidden">
                    {/* eslint-disable-next-line @next/next/no-img-element */}
                    <img src="https://images.unsplash.com/photo-1600607686527-6fb886090705?auto=format&fit=crop&q=80&w=200" alt={item.productName} className="w-full h-full object-cover" />
                 </div>
 
-                {/* 商品資訊 */}
                 <div className="flex-1">
-                  <h3 className="text-lg font-bold text-gray-900">{item.productName}</h3>
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <h3 className="text-lg font-bold text-gray-900">{item.productName}</h3>
+                    {/* 顯示服務模式標籤 */}
+                    {item.serviceType === 'material' ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-gray-100 text-gray-700 border border-gray-200">
+                        <Package className="w-3 h-3" /> 純材料
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-blue-50 text-blue-700 border border-blue-100">
+                        <Hammer className="w-3 h-3" /> 連工帶料
+                      </span>
+                    )}
+                  </div>
+
                   <div className="mt-2 space-y-1 text-sm text-gray-600">
                     <p><span className="font-medium">規格：</span>{item.colorName} / {item.materialName} / {item.openingDirection}</p>
                     <p>
@@ -130,7 +144,12 @@ export default function CartPage() {
                     )}
                   </div>
                   <div className="mt-4 flex items-center justify-between">
-                    <span className="text-2xl font-bold text-blue-600">${item.subtotal.toLocaleString()}</span>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-2xl font-bold text-blue-600">${item.subtotal.toLocaleString()}</span>
+                      <span className="text-xs text-gray-400">
+                        ({item.serviceType === 'material' ? '材料買斷價' : '含工資打包價'})
+                      </span>
+                    </div>
                     <span className="text-sm text-gray-400">數量: {item.quantity}</span>
                   </div>
                 </div>
@@ -155,7 +174,7 @@ export default function CartPage() {
               </div>
 
               {/* 案場名稱輸入 */}
-              <div className="mb-6">
+              <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">案場名稱 / 備註 *</label>
                 <input 
                   type="text" 
@@ -166,7 +185,19 @@ export default function CartPage() {
                 />
               </div>
 
-              {/* 免責聲明 */}
+              {/* ✨ 新增：訂單備註輸入框 (已修正 CSS 衝突) */}
+              <div className="mb-6">
+                <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-2">
+                  <MessageSquare className="w-4 h-4" /> 訂單備註 (選填)
+                </label>
+                <textarea 
+                  value={customerNote}
+                  onChange={(e) => setCustomerNote(e.target.value)}
+                  placeholder="例如：請週六配送、需要事先聯絡..."
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all h-24 resize-none text-sm"
+                />
+              </div>
+
               <label className="flex items-start gap-3 mb-6 cursor-pointer p-3 rounded-lg hover:bg-gray-50 transition-colors">
                 <input 
                   type="checkbox" 
@@ -179,7 +210,6 @@ export default function CartPage() {
                 </span>
               </label>
 
-              {/* 送出按鈕 */}
               <button 
                 onClick={handleSubmit}
                 disabled={isSubmitting}

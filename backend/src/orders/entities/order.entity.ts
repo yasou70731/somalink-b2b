@@ -1,12 +1,13 @@
 import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, OneToMany, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
-import { OrderItem } from './order-item.entity'; // 👈 引入 Item
+import { OrderItem } from './order-item.entity';
 
 export enum OrderStatus {
-  PENDING = 'pending',
-  PROCESSING = 'processing',
-  COMPLETED = 'completed',
-  CANCELLED = 'cancelled',
+  PENDING = 'pending',       // 待審核
+  PROCESSING = 'processing', // 生產中
+  SHIPPED = 'shipped',       // 已出貨
+  COMPLETED = 'completed',   // 已完成
+  CANCELLED = 'cancelled',   // 已取消
 }
 
 @Entity()
@@ -20,13 +21,11 @@ export class Order {
   @ManyToOne(() => User, { eager: true })
   user: User;
 
-  // 👇 新增: 一張訂單對應多個品項 (原本的 Product 關聯已移至 OrderItem)
   @OneToMany(() => OrderItem, (item) => item.order, { cascade: true, eager: true })
   items: OrderItem[];
 
-  // --- 📝 訂單層級資訊 ---
   @Column()
-  projectName: string; // 整個案場名稱
+  projectName: string;
 
   @Column({
     type: 'enum',
@@ -35,18 +34,19 @@ export class Order {
   })
   status: OrderStatus;
 
-  // 移除 ServiceType, WidthMatrix, HeightData 等欄位 (已搬家)
-
-  // --- 💰 總金額 ---
   @Column({ type: 'decimal', precision: 12, scale: 2 })
-  totalAmount: number; // 整張訂單的總加總 (Sum of items.subtotal)
+  totalAmount: number;
 
-  // --- 🛡️ 風控 ---
   @Column({ default: false })
   agreedToDisclaimer: boolean;
 
+  // ✨ 修改：加上 ? 讓 TypeScript 知道它是選填的 (string | undefined)
   @Column({ nullable: true })
-  adminNote: string;
+  adminNote?: string;
+
+  // ✨ 修改：加上 ? 讓 TypeScript 知道它是選填的 (string | undefined)
+  @Column({ nullable: true })
+  customerNote?: string;
 
   @CreateDateColumn()
   createdAt: Date;
