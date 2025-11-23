@@ -1,17 +1,12 @@
-import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, OneToMany, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
-import { Product } from '../../products/entities/product.entity';
+import { OrderItem } from './order-item.entity'; // 👈 引入 Item
 
 export enum OrderStatus {
-  PENDING = 'pending',       // 待審核 (初始狀態)
-  PROCESSING = 'processing', // 審核通過/排程中
-  COMPLETED = 'completed',   // 完成
-  CANCELLED = 'cancelled',   // 取消/拒絕
-}
-
-export enum ServiceType {
-  MATERIAL = 'material',   // 純材料
-  ASSEMBLED = 'assembled', // 含代工
+  PENDING = 'pending',
+  PROCESSING = 'processing',
+  COMPLETED = 'completed',
+  CANCELLED = 'cancelled',
 }
 
 @Entity()
@@ -19,86 +14,39 @@ export class Order {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  // 訂單編號 (e.g., ORD-20231120-X8Y2) - 可在 Service 層生成
   @Column({ unique: true })
   orderNumber: string;
 
-  // --- 關聯 ---
   @ManyToOne(() => User, { eager: true })
   user: User;
 
-  @ManyToOne(() => Product, { eager: true })
-  product: Product;
+  // 👇 新增: 一張訂單對應多個品項 (原本的 Product 關聯已移至 OrderItem)
+  @OneToMany(() => OrderItem, (item) => item.order, { cascade: true, eager: true })
+  items: OrderItem[];
 
-  // --- 📝 訂單基本資訊 ---
+  // --- 📝 訂單層級資訊 ---
   @Column()
-  projectName: string; // 案場名稱/備註
+  projectName: string; // 整個案場名稱
 
   @Column({
     type: 'enum',
     enum: OrderStatus,
-    default: OrderStatus.PENDING, // 預設全部都要審核
+    default: OrderStatus.PENDING,
   })
   status: OrderStatus;
 
-  @Column({
-    type: 'enum',
-    enum: ServiceType,
-  })
-  serviceType: ServiceType;
+  // 移除 ServiceType, WidthMatrix, HeightData 等欄位 (已搬家)
 
-  // --- 📏 核心丈量數據 (JSON) ---
-  
-  // 寬度矩陣: { top: 100, mid: 100.5, bot: 100 }
-  @Column({ type: 'jsonb' })
-  widthMatrix: { top: number; mid: number; bot: number };
-
-  // 高度數據: { left: 200, mid: 200, right: 200 } (封頂時) 或 { singleValue: 200 } (不封頂)
-  @Column({ type: 'jsonb' })
-  heightData: any; 
-
-  @Column({ default: true })
-  isCeilingMounted: boolean; // 是否封頂
-
-  // 環境誤差 (選填): { floor: {...}, leftWall: {...}, rightWall: {...} }
-  @Column({ type: 'jsonb', nullable: true })
-  siteConditions: any;
-
-  // --- 💰 金額與客製化 ---
-
-  @Column()
-  colorName: string; // 選了什麼顏色
-
-  @Column()
-  materialName: string; // 選了什麼玻璃/材質
-
-  @Column()
-  openingDirection: string; // 開門方向
-
-  @Column({ default: false })
-  hasThreshold: boolean; // 是否加購門檻
-
+  // --- 💰 總金額 ---
   @Column({ type: 'decimal', precision: 12, scale: 2 })
-  totalAmount: number; // 訂單總金額 (快照)
+  totalAmount: number; // 整張訂單的總加總 (Sum of items.subtotal)
 
-  // 價格明細快照 (Snapshot) - 存當下的計算細節，避免以後價格變動
-  @Column({ type: 'jsonb' })
-  priceSnapshot: {
-    basePrice: number;
-    sizeSurcharge: number;
-    colorSurcharge: number;
-    materialSurcharge: number;
-    assemblyFee: number;
-    thresholdFee: number;
-  };
-
-  // --- 🛡️ 風控與責任 ---
-
+  // --- 🛡️ 風控 ---
   @Column({ default: false })
-  agreedToDisclaimer: boolean; // 是否同意免責聲明
+  agreedToDisclaimer: boolean;
 
   @Column({ nullable: true })
-  adminNote: string; // 管理員審核備註 (e.g., "已確認尺寸")
+  adminNote: string;
 
   @CreateDateColumn()
   createdAt: Date;

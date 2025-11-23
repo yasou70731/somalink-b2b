@@ -2,18 +2,19 @@
 
 import { useState, use } from 'react';
 import { useRouter } from 'next/navigation';
-import { Ruler, Check, ShoppingCart, Minus, Plus, ArrowRight, Loader2 } from 'lucide-react';
+import { Ruler, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
 import MeasurementModal, { MeasurementData } from '@/components/MeasurementModal';
-import { api } from '@/lib/api';
+import { useCart, CartItem } from '@/context/CartContext'; // 引入 Context
 
 export default function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const { addToCart } = useCart(); // 取出 addToCart 方法
 
   // 模擬產品資料
   const product = {
-    id: "67240c89-d8ed-46eb-b8ce-0264642b3f44", // 記得確認這個 UUID 是否為您資料庫的真實 ID
+    id: "67240c89-d8ed-46eb-b8ce-0264642b3f44",
     name: "極簡細框拉門 X1",
     price: 5000,
     requiresMeasurement: true,
@@ -27,62 +28,73 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
       { id: 'frosted', name: '5mm 霧玻', surcharge: 0 },
       { id: 'line', name: '長虹玻璃', surcharge: 1200 },
     ],
-    // ✨ 修正處：只保留這兩個滑門選項
     openingOptions: ['左往右開', '右往左開'] 
   };
 
   // 狀態管理
   const [selectedColor, setSelectedColor] = useState(product.colors[0].id);
   const [selectedMaterial, setSelectedMaterial] = useState(product.materials[0].id);
-  // ✨ 預設選第一個
   const [openingDirection, setOpeningDirection] = useState(product.openingOptions[0]); 
   const [isMeasureOpen, setIsMeasureOpen] = useState(false);
-  const [quantity, setQuantity] = useState(1);
+  const [quantity] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // 計算價格
   const currentColor = product.colors.find(c => c.id === selectedColor);
   const currentMaterial = product.materials.find(m => m.id === selectedMaterial);
   const unitPrice = product.price + (currentColor?.surcharge || 0) + (currentMaterial?.surcharge || 0);
-  const totalPrice = unitPrice * quantity;
+  const subtotal = unitPrice * quantity;
 
-  // 送出訂單邏輯
-  const handleCheckout = async (measureData?: MeasurementData) => {
+  // ✨ 改成：加入購物車
+  const handleAddToCart = (measureData?: MeasurementData) => {
     setIsSubmitting(true);
-    try {
-      const payload = {
-        productId: product.id,
-        projectName: "未命名案場",
-        serviceType: "assembled",
-        colorName: currentColor?.name,
-        materialName: currentMaterial?.name,
-        openingDirection: openingDirection,
-        hasThreshold: false,
-        totalPrice: totalPrice,
-        widthMatrix: measureData?.width || { top: 0, mid: 0, bot: 0 },
-        heightData: measureData?.height || { left: 0, mid: 0, right: 0 },
-        isCeilingMounted: measureData?.isCeilingMounted ?? false,
-        siteConditions: {
-          floor: measureData?.floorError,
-        },
-        agreedToDisclaimer: true
-      };
 
-      await api.post('/orders', payload);
-      alert('🎉 下單成功！訂單已送至工廠審核。');
-      router.push('/');
+    // 1. 組裝 CartItem 資料
+    const newItem: CartItem = {
+      internalId: crypto.randomUUID(), // 前端產生唯一 ID
+      productId: product.id,
+      productName: product.name,
+      unitPrice: unitPrice,
+      quantity: quantity,
+      subtotal: subtotal,
+      
+      // 規格
+      serviceType: "assembled", // 預設代工
+      colorName: currentColor?.name || '未知',
+      materialName: currentMaterial?.name || '未知',
+      openingDirection: openingDirection,
+      hasThreshold: false,
 
-    } catch (error: any) {
-      console.error(error);
-      if (error.response?.status === 401) {
-        alert('請先登入才能下單！');
-        router.push('/login');
-      } else {
-        alert('下單失敗，請稍後再試。');
+      // 丈量數據 (如果有)
+      widthMatrix: measureData?.width || { top: 0, mid: 0, bot: 0 },
+      heightData: measureData?.height || { left: 0, mid: 0, right: 0 },
+      isCeilingMounted: measureData?.isCeilingMounted ?? false,
+      siteConditions: measureData?.floorError ? { floor: measureData.floorError } : undefined,
+
+      // 價格快照
+      priceSnapshot: {
+        basePrice: product.price,
+        sizeSurcharge: 0,
+        colorSurcharge: currentColor?.surcharge || 0,
+        materialSurcharge: currentMaterial?.surcharge || 0,
+        assemblyFee: 0,
+        thresholdFee: 0
       }
-    } finally {
+    };
+
+    // 2. 加入 Context
+    addToCart(newItem);
+
+    // 3. 模擬延遲與跳轉
+    setTimeout(() => {
       setIsSubmitting(false);
-    }
+      const confirm = window.confirm('🎉 已加入購物車！\n要去結帳嗎？還是繼續購物？');
+      if (confirm) {
+        router.push('/cart');
+      } else {
+        setIsMeasureOpen(false); // 關閉 Modal 繼續逛
+      }
+    }, 500);
   };
 
   return (
@@ -142,7 +154,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
               </div>
             </div>
 
-            {/* ✨ 開門方向選擇 (已修正) */}
+            {/* 開門方向 */}
             <div>
               <h3 className="text-sm font-bold text-gray-900 mb-3">開門方向</h3>
               <div className="grid grid-cols-2 gap-3">
@@ -157,7 +169,6 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                         : "border-gray-200 bg-white hover:border-gray-300 text-gray-500"
                     )}
                   >
-                    {/* 簡單的箭頭示意 */}
                     {opt === '左往右開' ? '⬅️ 左往右開' : '➡️ 右往左開'}
                   </button>
                 ))}
@@ -166,7 +177,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
 
             <hr className="border-gray-100" />
 
-            {/* 下單按鈕區 (略) */}
+            {/* 按鈕區 */}
             {product.requiresMeasurement ? (
               <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-5">
                 <div className="flex items-start gap-3 mb-4">
@@ -178,20 +189,19 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                   disabled={isSubmitting}
                   className="w-full py-3.5 bg-yellow-400 hover:bg-yellow-500 text-yellow-900 font-bold rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 disabled:opacity-70"
                 >
-                  {isSubmitting ? <Loader2 className="animate-spin" /> : <><Ruler className="w-5 h-5" /> 開始丈量並下單</>}
+                  {isSubmitting ? <Loader2 className="animate-spin" /> : <><Ruler className="w-5 h-5" /> 丈量並加入購物車</>}
                 </button>
               </div>
             ) : (
               <div className="space-y-4">
-                {/* ... 直接購買區 ... */}
-                <button className="w-full py-4 bg-blue-600 text-white font-bold rounded-xl">加入購物車</button>
+                <button onClick={() => alert("功能開發中...")} className="w-full py-4 bg-blue-600 text-white font-bold rounded-xl">加入購物車</button>
               </div>
             )}
 
             <MeasurementModal 
               isOpen={isMeasureOpen}
               onClose={() => setIsMeasureOpen(false)}
-              onConfirm={(data) => handleCheckout(data)}
+              onConfirm={(data) => handleAddToCart(data)}
             />
 
           </div>
