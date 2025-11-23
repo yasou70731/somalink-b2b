@@ -1,9 +1,12 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, ConflictException, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User, UserRole } from './entities/user.entity';
-import { DealerProfile, DealerLevel, TradeType } from './entities/dealer-profile.entity';
+import * as bcrypt from 'bcrypt';
+import { User } from './entities/user.entity';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 import { TradeCategory } from './entities/trade-category.entity';
+import { DealerProfile, DealerLevel } from './entities/dealer-profile.entity'; // Import DealerLevel enum
 
 @Injectable()
 export class UsersService {
@@ -11,147 +14,101 @@ export class UsersService {
     @InjectRepository(User)
     private usersRepository: Repository<User>,
     @InjectRepository(TradeCategory)
-    private categoryRepository: Repository<TradeCategory>,
+    private tradeCategoriesRepository: Repository<TradeCategory>,
+    @InjectRepository(DealerProfile)
+    private dealerProfileRepository: Repository<DealerProfile>,
   ) {}
 
-  // 1. 查 Email (登入用)
-  async findOneByEmail(email: string): Promise<User | null> {
-    return this.usersRepository.findOne({ 
-      where: { email },
-      relations: ['dealerProfile'] 
+  async create(createUserDto: CreateUserDto) {
+    // 1. Check if Email exists
+    const existingUser = await this.usersRepository.findOne({ 
+      where: { email: createUserDto.email } 
     });
-  }
-
-  // 2. 註冊新帳號
-  async create(createUserDto: any) {
-    const existingUser = await this.findOneByEmail(createUserDto.email);
+    
     if (existingUser) {
-      throw new BadRequestException('此 Email 已經註冊過');
+      throw new ConflictException('此 Email 已經被註冊');
     }
 
-    const profile = new DealerProfile();
-    profile.companyName = createUserDto.companyName || '未命名公司';
-    profile.taxId = createUserDto.taxId || '00000000';
-    profile.address = createUserDto.address || '地址待補';
-    profile.contactPerson = createUserDto.contactPerson || '聯絡人';
-    profile.phone = createUserDto.phone || '0900000000';
-    
-    const inputTradeType = createUserDto.tradeType;
-    profile.tradeType = inputTradeType;
-
-    const category = await this.categoryRepository.findOneBy({ code: inputTradeType });
-
-    if (category) {
-      profile.isUpgradeable = category.isUpgradeable;
-    } else {
-      const legacyUpgradeable = ['glass', 'shower_door', 'aluminum'];
-      profile.isUpgradeable = legacyUpgradeable.includes(inputTradeType);
-    }
-    
-    profile.level = createUserDto.level || DealerLevel.C; 
-    profile.walletBalance = 0;
-
+    // 2. Create User Entity
     const user = new User();
     user.email = createUserDto.email;
-    user.password = createUserDto.password; 
-    user.isActive = false; // 預設未啟用
-    user.dealerProfile = profile;
-
-    return this.usersRepository.save(user);
-  }
-
-  // 3. 查詢所有使用者
-  findAll() {
-    return this.usersRepository.find({
-      relations: ['dealerProfile'],
-      order: { createdAt: 'DESC' }
-    });
-  }
-
-  // 4. 切換啟用狀態
-  async toggleActive(userId: string, isActive: boolean) {
-    await this.usersRepository.update(userId, { isActive });
-    return this.usersRepository.findOne({ where: { id: userId }, relations: ['dealerProfile'] });
-  }
-
-  // 5. 修改等級
-  async updateLevel(userId: string, level: DealerLevel) {
-    const user = await this.usersRepository.findOne({ 
-      where: { id: userId },
-      relations: ['dealerProfile'] 
-    });
-
-    if (!user || !user.dealerProfile) throw new Error('找不到使用者');
-
-    user.dealerProfile.level = level;
-    return this.usersRepository.save(user);
-  }
-
-  // 6. 錢包儲值
-  async deposit(userId: string, amount: number) {
-    const user = await this.usersRepository.findOne({ 
-      where: { id: userId },
-      relations: ['dealerProfile'] 
-    });
-
-    if (!user || !user.dealerProfile) throw new Error('找無此經銷商');
-
-    const profile = user.dealerProfile;
-    const level = profile.level;
-
-    const LIMITS = {
-      'A': 200000,
-      'B': 100000,
-      'C': 0 
-    };
-
-    const limit = (LIMITS as any)[level] || 0;
-
-    if (amount > limit) {
-      throw new Error(`儲值失敗：${level} 級經銷商單筆上限為 $${limit.toLocaleString()}`);
-    }
-
-    const currentBalance = Number(profile.walletBalance);
-    const addAmount = Number(amount);
-    profile.walletBalance = currentBalance + addAmount;
-
-    return this.usersRepository.save(user);
-  }
-
-  // 7. 刪除使用者
-  async remove(id: string) {
-    const user = await this.usersRepository.findOne({ where: { id } });
-    if (!user) {
-      throw new Error('找不到使用者');
-    }
-    return this.usersRepository.remove(user);
-  }
-
-  // 8. 初始化分類
-  async initCategories() {
-    const defaults = [
-      { name: '專業玻璃行', code: 'glass', isUpgradeable: true },
-      { name: '淋浴拉門同行', code: 'shower_door', isUpgradeable: true },
-      { name: '鋁門窗行', code: 'aluminum', isUpgradeable: true },
-      { name: '工程行 / 統包', code: 'construction', isUpgradeable: false },
-      { name: '室內設計 / 建築師', code: 'design', isUpgradeable: false },
-    ];
-
-    for (const cat of defaults) {
-      const exists = await this.categoryRepository.findOneBy({ code: cat.code });
-      if (!exists) {
-        await this.categoryRepository.save(cat);
-      }
-    }
-  }
-
-  // 9. 升級管理員
-  async makeAdmin(email: string) {
-    const user = await this.findOneByEmail(email);
-    if (!user) throw new Error(`找不到 Email 為 ${email} 的帳號`);
+    user.name = createUserDto.name;
     
-    user.role = UserRole.ADMIN; 
-    user.isActive = true; 
-    return this.usersRepository.save(user);
+    // Encrypt password
+    const salt = await bcrypt.genSalt();
+    user.password = await bcrypt.hash(createUserDto.password, salt);
+
+    // 3. Handle Trade Category
+    if (createUserDto.tradeCategoryId && createUserDto.tradeCategoryId.trim() !== '') {
+      const tradeCategory = await this.tradeCategoriesRepository.findOneBy({ 
+        id: createUserDto.tradeCategoryId 
+      });
+      
+      if (!tradeCategory) {
+        throw new NotFoundException('選擇的營業類別無效');
+      }
+      user.tradeCategory = tradeCategory;
+    } else {
+      user.tradeCategory = null;
+    }
+
+    // 4. Handle Dealer Profile
+    if (createUserDto.dealerProfile) {
+      const profile = new DealerProfile();
+      Object.assign(profile, createUserDto.dealerProfile);
+      
+      // ✨ Fix: Use the enum member instead of string literal
+      profile.level = DealerLevel.C; 
+      
+      profile.isVerified = false;
+      user.dealerProfile = profile;
+    }
+
+    // 5. Save to DB
+    try {
+      user.isActive = false;
+      return await this.usersRepository.save(user);
+    } catch (error: any) {
+      console.error('Registration Error:', error);
+      if (error.code === '23505') { 
+        throw new ConflictException('資料重複 (Email 或統編已存在)');
+      }
+      throw new InternalServerErrorException('註冊失敗，請稍後再試');
+    }
+  }
+
+  async findAll() {
+    return this.usersRepository.find({
+      relations: ['tradeCategory', 'dealerProfile'],
+    });
+  }
+
+  async findOne(id: string) {
+    const user = await this.usersRepository.findOne({
+      where: { id },
+      relations: ['tradeCategory', 'dealerProfile'],
+    });
+    if (!user) throw new NotFoundException(`User #${id} not found`);
+    return user;
+  }
+
+  async findByEmail(email: string) {
+    return this.usersRepository.findOne({
+      where: { email },
+      relations: ['tradeCategory', 'dealerProfile'],
+    });
+  }
+
+  async update(id: string, updateUserDto: UpdateUserDto) {
+    await this.usersRepository.update(id, {
+      isActive: updateUserDto.isActive,
+      role: updateUserDto.role,
+    });
+    return this.findOne(id);
+  }
+
+  async remove(id: string) {
+    const user = await this.findOne(id);
+    return this.usersRepository.remove(user);
   }
 }

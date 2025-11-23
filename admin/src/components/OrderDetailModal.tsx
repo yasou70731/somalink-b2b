@@ -77,7 +77,7 @@ export default function OrderDetailModal({ order, isOpen, onClose, onStatusUpdat
                   order.status === 'processing' ? 'bg-blue-100 text-blue-800' : 
                   order.status === 'shipped' ? 'bg-purple-100 text-purple-800' :
                   'bg-green-100 text-green-800'}`}>
-                {order.status.toUpperCase()}
+                {typeof order.status === 'string' ? order.status.toUpperCase() : order.status}
               </span>
             </div>
             <p className="text-sm text-gray-500 mt-1">
