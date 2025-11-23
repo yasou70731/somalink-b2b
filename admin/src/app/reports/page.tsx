@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { BarChart3, PieChart as PieIcon, TrendingUp, DollarSign, Package } from 'lucide-react';
+import { BarChart3, PieChart as PieIcon, TrendingUp, DollarSign, Package, Trophy, Palette } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { api } from '@/lib/api';
 
@@ -82,7 +82,7 @@ export default function ReportsPage() {
       </div>
 
       {/* 2. 圖表區 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
         
         {/* 營收趨勢圖 (Bar Chart) */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
@@ -118,7 +118,7 @@ export default function ReportsPage() {
                   fill="#8884d8"
                   paddingAngle={5}
                   dataKey="value"
-                  // ✨ 修正點：加入 (percent || 0) 確保數值存在
+                  // ✨ 防呆修正：(percent || 0)
                   label={({name, percent}) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
                 >
                   {pieData.map((entry: any, index: number) => (
@@ -130,6 +130,66 @@ export default function ReportsPage() {
               </PieChart>
             </ResponsiveContainer>
           </div>
+        </div>
+      </div>
+
+      {/* ✨ 3. 熱銷排行榜 (Top 5) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        
+        {/* 熱銷產品 */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <div className="p-6 border-b border-gray-100 flex items-center gap-2">
+            <Trophy className="w-5 h-5 text-yellow-500" />
+            <h3 className="text-lg font-bold text-gray-900">熱銷產品排行 (Top 5)</h3>
+          </div>
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">排名</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">產品名稱</th>
+                <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase">銷售數量</th>
+                <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase">總營收</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {data.productStats?.map((item: any, index: number) => (
+                <tr key={index} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 text-sm text-gray-500 font-bold">#{index + 1}</td>
+                  <td className="px-6 py-4 text-sm text-gray-900 font-medium">{item.name || '未知產品'}</td>
+                  <td className="px-6 py-4 text-sm text-gray-900 text-right">{item.count}</td>
+                  <td className="px-6 py-4 text-sm text-blue-600 font-bold text-right">${Number(item.revenue).toLocaleString()}</td>
+                </tr>
+              ))}
+              {(!data.productStats || data.productStats.length === 0) && <tr><td colSpan={4} className="p-4 text-center text-gray-400 text-sm">暫無數據</td></tr>}
+            </tbody>
+          </table>
+        </div>
+
+        {/* 熱銷顏色 */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <div className="p-6 border-b border-gray-100 flex items-center gap-2">
+            <Palette className="w-5 h-5 text-pink-500" />
+            <h3 className="text-lg font-bold text-gray-900">熱銷顏色排行 (Top 5)</h3>
+          </div>
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">排名</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">顏色名稱</th>
+                <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase">選擇次數</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {data.colorStats?.map((item: any, index: number) => (
+                <tr key={index} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 text-sm text-gray-500 font-bold">#{index + 1}</td>
+                  <td className="px-6 py-4 text-sm text-gray-900 font-medium">{item.name || '未選色'}</td>
+                  <td className="px-6 py-4 text-sm text-gray-900 text-right">{item.count}</td>
+                </tr>
+              ))}
+              {(!data.colorStats || data.colorStats.length === 0) && <tr><td colSpan={3} className="p-4 text-center text-gray-400 text-sm">暫無數據</td></tr>}
+            </tbody>
+          </table>
         </div>
 
       </div>

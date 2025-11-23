@@ -28,8 +28,7 @@ export class ReportsService {
       .groupBy('order.status')
       .getRawMany();
 
-    // 4. 最近 6 個月營收趨勢 (Bar Chart) - 簡易版：取所有訂單後端整理 (MVP寫法)
-    // (若資料量大建議用 SQL Group By Date，這裡為了跨資料庫相容性先用 JS 處理)
+    // 4. 最近 6 個月營收趨勢 (Bar Chart)
     const allOrders = await this.ordersRepo.find({ 
       where: {  }, 
       select: ['totalAmount', 'createdAt', 'status'],
@@ -44,17 +43,42 @@ export class ReportsService {
       monthlyStats[month] += Number(o.totalAmount);
     });
 
-    // 轉成陣列格式給前端圖表用
     const trendData = Object.keys(monthlyStats).map(month => ({
       name: month,
       total: monthlyStats[month]
-    })).slice(-6); // 只取最近 6 個月
+    })).slice(-6); 
+
+    // ✨ 5. 新增：熱銷產品排行 (Top 5 Products)
+    // 統計產品名稱出現的次數
+    // 注意：這裡需要關聯 product 才能抓到名稱，但我們的 Order 已經有 product 關聯
+    const productStats = await this.ordersRepo.createQueryBuilder('order')
+      .leftJoinAndSelect('order.product', 'product')
+      .select('product.name', 'name')
+      .addSelect('COUNT(order.id)', 'count')
+      .addSelect('SUM(order.totalAmount)', 'revenue') // 順便算該產品的總營收
+      .where('order.status != :status', { status: 'cancelled' })
+      .groupBy('product.name')
+      .orderBy('count', 'DESC')
+      .limit(5) // 取前 5 名
+      .getRawMany();
+
+    // ✨ 6. 新增：熱銷顏色排行 (Top 5 Colors)
+    const colorStats = await this.ordersRepo.createQueryBuilder('order')
+      .select('order.colorName', 'name')
+      .addSelect('COUNT(order.id)', 'count')
+      .where('order.status != :status', { status: 'cancelled' })
+      .groupBy('order.colorName')
+      .orderBy('count', 'DESC')
+      .limit(5)
+      .getRawMany();
 
     return {
       totalRevenue,
       totalOrders,
       statusDist,
       trendData,
+      productStats, // 回傳產品排行
+      colorStats,   // 回傳顏色排行
     };
   }
 }
