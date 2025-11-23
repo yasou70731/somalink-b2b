@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LayoutDashboard, Package, Users, Settings, LogOut, Layers } from "lucide-react";
+import { LayoutDashboard, Package, Users, Settings, LogOut, Layers, BarChart3 } from "lucide-react"; // ✨ 引入 BarChart3 圖示
 
 export default function Sidebar() {
   const router = useRouter();
@@ -24,7 +24,6 @@ export default function Sidebar() {
         <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center font-bold text-lg mr-3 shadow-blue-900/20">
           S
         </div>
-        {/* ✨ 修改這裡：改成 松成有限公司 */}
         <span className="font-bold text-lg tracking-wide">松成有限公司</span>
       </div>
 
@@ -36,6 +35,15 @@ export default function Sidebar() {
         >
           <LayoutDashboard className="w-5 h-5 mr-3 group-hover:text-blue-400 transition-colors" />
           訂單戰情室
+        </Link>
+
+        {/* ✨ 新增：營運報表按鈕 */}
+        <Link 
+          href="/reports" 
+          className="flex items-center px-3 py-3 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors group"
+        >
+          <BarChart3 className="w-5 h-5 mr-3 group-hover:text-blue-400 transition-colors" />
+          營運報表
         </Link>
 
         <Link 
