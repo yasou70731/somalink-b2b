@@ -1,48 +1,100 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { api } from '@/lib/api';
-import { Loader2, UserPlus, Building2, FileText, User, Phone, Mail, Lock, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
+import { Building2, Mail, Lock, User, Phone, MapPin, FileText, Loader2, AlertCircle } from 'lucide-react';
+import { api } from '@/lib/api';
+
+// 定義營業類別型別
+interface TradeCategory {
+  id: string;
+  name: string;
+}
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(false);
-  
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [categories, setCategories] = useState<TradeCategory[]>([]);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  // 表單狀態
   const [formData, setFormData] = useState({
     email: '',
     password: '',
+    confirmPassword: '',
+    name: '', // 聯絡人姓名
     companyName: '',
-    taxId: '', // 統編
-    contactPerson: '',
+    taxId: '',
     phone: '',
-    address: '' // 地址 (可選)
+    address: '',
+    tradeCategoryId: '',
   });
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // 載入營業類別
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        // 假設後端有這支 API，若沒有可先忽略或寫死
+        // const res = await api.get('/trade-categories'); 
+        // setCategories(res);
+        
+        // 暫時模擬資料 (避免頁面壞掉)
+        setCategories([
+          { id: 'cat_glass', name: '玻璃行 / 加工廠' },
+          { id: 'cat_design', name: '室內設計 / 裝修' },
+          { id: 'cat_other', name: '其他建材同業' },
+        ]);
+      } catch (err) {
+        console.error('Failed to fetch categories', err);
+      }
+    };
+    fetchCategories();
+  }, []);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
+    setErrorMsg('');
+
+    if (formData.password !== formData.confirmPassword) {
+      setErrorMsg('兩次密碼輸入不一致');
+      return;
+    }
+
+    setIsSubmitting(true);
 
     try {
-      // 呼叫後端 API: POST /users
-      // 後端會自動建立 User + DealerProfile (預設 C 級)
-      await api.post('/users', formData);
-      
-      alert('🎉 申請成功！請使用剛設定的帳號密碼登入。');
-      router.push('/login'); // 註冊完導回登入頁
+      // ✨ 資料清理：確保 tradeCategoryId 若為空字串則轉為 undefined 或 null
+      const payload = {
+        email: formData.email,
+        password: formData.password,
+        name: formData.name,
+        tradeCategoryId: formData.tradeCategoryId || undefined, // 關鍵修正
+        dealerProfile: {
+          companyName: formData.companyName,
+          taxId: formData.taxId,
+          contactPerson: formData.name,
+          phone: formData.phone,
+          address: formData.address,
+        },
+      };
 
-    } catch (err: any) {
-      console.error(err);
-      // 如果後端回傳錯誤 (例如 Email 重複)
-      const msg = err.response?.data?.message || '註冊失敗，請稍後再試';
-      alert(`註冊失敗：${msg}`);
+      await api.post('/users', payload);
+      
+      alert('🎉 註冊成功！\n請等待管理員審核開通帳號。');
+      router.push('/login');
+
+    } catch (error: any) {
+      console.error(error);
+      // 顯示後端回傳的錯誤訊息
+      const message = error.response?.data?.message || '註冊失敗，請稍後再試';
+      setErrorMsg(Array.isArray(message) ? message[0] : message);
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -50,71 +102,190 @@ export default function RegisterPage() {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-2xl shadow-lg border border-gray-100">
         
+        {/* Header */}
         <div className="text-center">
-          <div className="mx-auto h-12 w-12 bg-green-600 rounded-xl flex items-center justify-center text-white font-bold text-2xl mb-4 shadow-green-200 shadow-md">
-            <UserPlus className="w-6 h-6" />
+          <div className="mx-auto h-12 w-12 bg-blue-100 rounded-xl flex items-center justify-center mb-4">
+            <User className="h-6 w-6 text-blue-600" />
           </div>
-          <h2 className="text-2xl font-bold tracking-tight text-gray-900">
-            申請成為經銷商
-          </h2>
+          <h2 className="text-3xl font-extrabold text-gray-900">註冊經銷商帳號</h2>
           <p className="mt-2 text-sm text-gray-600">
-            填寫公司資料，加入 SomaLink B2B 供應鏈
+            加入 SomaLink，享受 B2B 數位工廠服務
           </p>
         </div>
 
-        <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
-          
-          {/* 帳號密碼區 */}
-          <div className="space-y-3 bg-gray-50 p-4 rounded-xl border border-gray-100">
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">登入資訊</p>
-            <div className="relative">
-              <Mail className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-              <input name="email" type="email" required placeholder="Email (作為登入帳號)" onChange={handleChange} 
-                className="w-full pl-10 p-2.5 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-green-500 bg-white" />
+        {/* Error Message */}
+        {errorMsg && (
+          <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl flex items-center gap-2 text-sm animate-pulse">
+            <AlertCircle className="w-4 h-4" />
+            {errorMsg}
+          </div>
+        )}
+
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          <div className="space-y-4">
+            
+            {/* 帳號資訊 */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email (登入帳號)</label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+                  <input
+                    name="email"
+                    type="email"
+                    required
+                    className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="your@email.com"
+                    onChange={handleChange}
+                  />
+                </div>
+              </div>
+              
+              <div className="col-span-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">密碼</label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+                  <input
+                    name="password"
+                    type="password"
+                    required
+                    className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="******"
+                    onChange={handleChange}
+                  />
+                </div>
+              </div>
+
+              <div className="col-span-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">確認密碼</label>
+                <input
+                  name="confirmPassword"
+                  type="password"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="******"
+                  onChange={handleChange}
+                />
+              </div>
             </div>
-            <div className="relative">
-              <Lock className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-              <input name="password" type="password" required placeholder="設定密碼" onChange={handleChange} 
-                className="w-full pl-10 p-2.5 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-green-500 bg-white" />
+
+            {/* ✨ 這裡使用了優化後的 class: grow, shrink-0 */}
+            <div className="relative flex py-2 items-center">
+              <div className="grow border-t border-gray-200"></div>
+              <span className="shrink-0 mx-4 text-gray-400 text-xs">公司資料</span>
+              <div className="grow border-t border-gray-200"></div>
             </div>
+
+            {/* 公司資訊 */}
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">公司名稱</label>
+                <div className="relative">
+                  <Building2 className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+                  <input
+                    name="companyName"
+                    type="text"
+                    required
+                    className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="例如：松成有限公司"
+                    onChange={handleChange}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">聯絡人姓名</label>
+                  <input
+                    name="name"
+                    type="text"
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="王小明"
+                    onChange={handleChange}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">聯絡電話</label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+                    <input
+                      name="phone"
+                      type="tel"
+                      required
+                      className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="0912-345-678"
+                      onChange={handleChange}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">統一編號 (選填)</label>
+                  <div className="relative">
+                    <FileText className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+                    <input
+                      name="taxId"
+                      type="text"
+                      className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="8碼統編"
+                      onChange={handleChange}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">營業類別</label>
+                  <select
+                    name="tradeCategoryId"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-blue-500 focus:border-blue-500 bg-white"
+                    onChange={handleChange}
+                    value={formData.tradeCategoryId}
+                  >
+                    <option value="">請選擇...</option>
+                    {categories.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">公司地址</label>
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+                  <input
+                    name="address"
+                    type="text"
+                    required
+                    className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="請輸入完整地址"
+                    onChange={handleChange}
+                  />
+                </div>
+              </div>
+            </div>
+
           </div>
 
-          {/* 公司資料區 */}
-          <div className="space-y-3 bg-gray-50 p-4 rounded-xl border border-gray-100">
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">公司資料</p>
-            <div className="relative">
-              <Building2 className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-              <input name="companyName" required placeholder="公司名稱 / 行號" onChange={handleChange} 
-                className="w-full pl-10 p-2.5 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-green-500 bg-white" />
-            </div>
-            <div className="relative">
-              <FileText className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-              <input name="taxId" required placeholder="統一編號" onChange={handleChange} 
-                className="w-full pl-10 p-2.5 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-green-500 bg-white" />
-            </div>
-            <div className="relative">
-              <User className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-              <input name="contactPerson" required placeholder="聯絡人姓名" onChange={handleChange} 
-                className="w-full pl-10 p-2.5 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-green-500 bg-white" />
-            </div>
-            <div className="relative">
-              <Phone className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-              <input name="phone" required placeholder="聯絡電話 / 手機" onChange={handleChange} 
-                className="w-full pl-10 p-2.5 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-green-500 bg-white" />
-            </div>
-          </div>
-
-          <button type="submit" disabled={isLoading}
-            className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg text-sm font-bold text-white bg-green-600 hover:bg-green-700 shadow-md transition-all disabled:opacity-70 mt-6">
-            {isLoading ? <Loader2 className="animate-spin" /> : '提交申請'}
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-xl text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-70 transition-colors shadow-lg hover:shadow-xl"
+          >
+            {isSubmitting ? (
+              <Loader2 className="animate-spin h-5 w-5" />
+            ) : (
+              '註冊帳號'
+            )}
           </button>
 
-          <div className="text-center mt-4">
-            <Link href="/login" className="text-sm text-green-600 hover:underline flex items-center justify-center gap-1">
-              <ArrowLeft className="w-4 h-4" /> 已有帳號？返回登入
+          <div className="text-center">
+            <Link href="/login" className="font-medium text-blue-600 hover:text-blue-500 text-sm">
+              已經有帳號？返回登入
             </Link>
           </div>
-
         </form>
       </div>
     </div>

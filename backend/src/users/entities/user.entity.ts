@@ -1,9 +1,10 @@
-import { Entity, Column, PrimaryGeneratedColumn, OneToOne, JoinColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, OneToOne, JoinColumn, ManyToOne, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { DealerProfile } from './dealer-profile.entity';
+import { TradeCategory } from './trade-category.entity';
 
 export enum UserRole {
-  ADMIN = 'admin',
-  DEALER = 'dealer',
+  ADMIN = 'ADMIN',
+  DEALER = 'DEALER',
 }
 
 @Entity()
@@ -17,6 +18,9 @@ export class User {
   @Column()
   password: string;
 
+  @Column()
+  name: string;
+
   @Column({
     type: 'enum',
     enum: UserRole,
@@ -24,15 +28,18 @@ export class User {
   })
   role: UserRole;
 
-  @Column({ default: true })
+  @Column({ default: false })
   isActive: boolean;
 
-  @OneToOne(() => DealerProfile, (profile) => profile.user, {
-    cascade: true,
-    eager: true,
-  })
+  // --- 關聯 ---
+
+  @OneToOne(() => DealerProfile, { cascade: true, eager: true })
   @JoinColumn()
   dealerProfile: DealerProfile;
+
+  // ✨ 修正：允許為 null (TradeCategory | null)
+  @ManyToOne(() => TradeCategory, { eager: true, nullable: true })
+  tradeCategory: TradeCategory | null;
 
   @CreateDateColumn()
   createdAt: Date;

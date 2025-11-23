@@ -1,6 +1,6 @@
 'use client';
 
-import { X, Printer, Package, Ruler, AlertCircle, Trash2, Hammer, MessageSquare, Truck } from 'lucide-react';
+import { X, Printer, Package, Ruler, AlertCircle, Trash2, Hammer, MessageSquare, Truck, CheckCircle } from 'lucide-react';
 import { Order, api } from '@/lib/api';
 import { useState } from 'react';
 import Link from 'next/link';
@@ -17,15 +17,17 @@ export default function OrderDetailModal({ order, isOpen, onClose, onStatusUpdat
 
   if (!isOpen || !order) return null;
 
-  // 處理狀態變更
+  // 處理狀態變更 (核心邏輯)
   const handleStatusChange = async (newStatus: string) => {
-    // 針對不同動作顯示不同的確認訊息
+    // 根據不同狀態顯示更明確的確認訊息
     let confirmMsg = `確定要將狀態變更為 ${newStatus} 嗎？`;
     
-    if (newStatus === 'shipped') {
-      confirmMsg = `🚚 準備出貨了嗎？\n\n確定將訂單標記為「已出貨」？系統將會發送通知給客戶。`;
+    if (newStatus === 'processing') {
+      confirmMsg = `✅ 審核通過確認\n\n確定接受此訂單並開始生產？`;
+    } else if (newStatus === 'shipped') {
+      confirmMsg = `🚚 出貨確認\n\n確定將訂單標記為「已出貨」？\n系統將會發送 Email 通知客戶。`;
     } else if (newStatus === 'completed') {
-      confirmMsg = `✅ 訂單結案確認\n\n確定將訂單標記為「已完工」？`;
+      confirmMsg = `🎉 完工結案\n\n確定將訂單標記為「已完成」？`;
     }
 
     if (!confirm(confirmMsg)) return;
@@ -33,7 +35,7 @@ export default function OrderDetailModal({ order, isOpen, onClose, onStatusUpdat
     setIsUpdating(true);
     try {
       await api.patch(`/orders/${order.id}/status`, { status: newStatus });
-      onStatusUpdate(); // 通知父層列表更新
+      onStatusUpdate(); // 通知外層列表更新
       onClose();        // 關閉視窗
     } catch (error) {
       console.error(error);
@@ -63,14 +65,13 @@ export default function OrderDetailModal({ order, isOpen, onClose, onStatusUpdat
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
         
-        {/* 頂部標題列 */}
+        {/* Header */}
         <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
           <div>
             <div className="flex items-center gap-3">
               <h2 className="text-xl font-bold text-gray-900">{order.orderNumber}</h2>
-              {/* 狀態標籤 */}
               <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold 
                 ${order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 
                   order.status === 'processing' ? 'bg-blue-100 text-blue-800' : 
@@ -88,37 +89,37 @@ export default function OrderDetailModal({ order, isOpen, onClose, onStatusUpdat
           </button>
         </div>
 
-        {/* 內容區 (可捲動) */}
+        {/* Content (可捲動區域) */}
         <div className="flex-1 overflow-y-auto p-6 space-y-8">
 
-          {/* 1. 訂單摘要資訊 */}
+          {/* 1. 訂單摘要卡片 */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
              <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
-               <span className="text-sm text-blue-600 block mb-1">訂單總金額</span>
+               <span className="text-sm text-blue-600 block mb-1 font-medium">訂單總金額</span>
                <span className="text-2xl font-bold text-blue-900">${Number(order.totalAmount).toLocaleString()}</span>
              </div>
              <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-               <span className="text-sm text-gray-500 block mb-1">下單時間</span>
+               <span className="text-sm text-gray-500 block mb-1 font-medium">下單時間</span>
                <span className="font-medium text-gray-900">{new Date(order.createdAt).toLocaleString('zh-TW')}</span>
              </div>
              <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-               <span className="text-sm text-gray-500 block mb-1">聯絡電話</span>
+               <span className="text-sm text-gray-500 block mb-1 font-medium">聯絡電話</span>
                <span className="font-medium text-gray-900">{order.user?.dealerProfile?.phone || 'N/A'}</span>
              </div>
           </div>
 
-          {/* 2. 客戶備註 (如果有填寫才顯示) */}
+          {/* 2. 客戶備註 (如果有填寫) */}
           {order.customerNote && (
-            <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex items-start gap-3">
-              <MessageSquare className="w-5 h-5 text-blue-600 mt-0.5" />
+            <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 flex items-start gap-3">
+              <MessageSquare className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
               <div>
-                <span className="text-sm font-bold text-blue-800 block mb-1">客戶備註：</span>
-                <p className="text-sm text-blue-900 leading-relaxed whitespace-pre-wrap">{order.customerNote}</p>
+                <span className="text-sm font-bold text-amber-800 block mb-1">客戶備註：</span>
+                <p className="text-sm text-amber-900 leading-relaxed whitespace-pre-wrap">{order.customerNote}</p>
               </div>
             </div>
           )}
 
-          {/* 3. 商品列表 (支援多品項與服務模式顯示) */}
+          {/* 3. 商品明細表格 */}
           <div>
             <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
               <Package className="w-5 h-5" /> 訂購品項 ({order.items?.length || 0})
@@ -129,7 +130,7 @@ export default function OrderDetailModal({ order, isOpen, onClose, onStatusUpdat
                 <thead className="bg-gray-50 border-b border-gray-200 text-gray-500 font-medium">
                   <tr>
                     <th className="px-4 py-3">產品資訊</th>
-                    <th className="px-4 py-3">製作尺寸</th>
+                    <th className="px-4 py-3">尺寸 (寬x高)</th>
                     <th className="px-4 py-3">規格細節</th>
                     <th className="px-4 py-3">特殊需求</th>
                     <th className="px-4 py-3 text-right">小計</th>
@@ -138,7 +139,6 @@ export default function OrderDetailModal({ order, isOpen, onClose, onStatusUpdat
                 <tbody className="divide-y divide-gray-100">
                   {order.items?.map((item, index) => (
                     <tr key={index} className="hover:bg-gray-50 transition-colors">
-                      {/* 產品資訊 */}
                       <td className="px-4 py-4">
                         <div className="font-medium text-gray-900">{item.product?.name || '未知產品'}</div>
                         <div className="flex items-center gap-2 mt-1">
@@ -151,33 +151,29 @@ export default function OrderDetailModal({ order, isOpen, onClose, onStatusUpdat
                               <Hammer className="w-3 h-3" /> 連工帶料
                             </span>
                           )}
-                          <span className="text-xs text-gray-400">x{item.quantity}</span>
+                          <span className="text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">x{item.quantity}</span>
                         </div>
                       </td>
-                      {/* 尺寸 */}
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-1 font-mono text-blue-700 bg-blue-50 px-2 py-1 rounded w-fit">
                           <Ruler className="w-3 h-3" />
                           {item.widthMatrix.mid} x {item.heightData.singleValue || item.heightData.mid}
                         </div>
-                        {item.isCeilingMounted && <span className="text-xs text-green-600 mt-1 block">✔ 封頂安裝</span>}
+                        {item.isCeilingMounted && <span className="text-xs text-green-600 mt-1 block font-medium">✔ 封頂安裝</span>}
                       </td>
-                      {/* 規格 */}
                       <td className="px-4 py-4 text-gray-600">
                         <div>{item.colorName}</div>
                         <div>{item.materialName}</div>
-                        <div className="text-xs text-gray-400">{item.openingDirection}</div>
+                        <div className="text-xs text-gray-400 mt-0.5">{item.openingDirection}</div>
                       </td>
-                      {/* 環境誤差 */}
                       <td className="px-4 py-4 text-gray-500">
                          {item.siteConditions?.floor && (
-                           <div className="flex items-center gap-1 text-orange-600 text-xs">
+                           <div className="flex items-center gap-1 text-orange-600 text-xs font-medium bg-orange-50 px-2 py-1 rounded w-fit">
                              <AlertCircle className="w-3 h-3" /> 地面誤差 {item.siteConditions.floor.diff}cm
                            </div>
                          )}
                          {!item.siteConditions?.floor && '-'}
                       </td>
-                      {/* 小計 */}
                       <td className="px-4 py-4 text-right font-bold text-gray-900">
                         ${Number(item.subtotal).toLocaleString()}
                       </td>
@@ -188,7 +184,7 @@ export default function OrderDetailModal({ order, isOpen, onClose, onStatusUpdat
             </div>
           </div>
 
-          {/* 4. 管理員備註 */}
+          {/* 4. 管理員備註區 */}
           {order.adminNote && (
              <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200 text-yellow-800 text-sm">
                <strong>管理員備註：</strong> {order.adminNote}
@@ -197,68 +193,69 @@ export default function OrderDetailModal({ order, isOpen, onClose, onStatusUpdat
 
         </div>
 
-        {/* 底部操作按鈕區 (Action Bar) */}
+        {/* Footer Actions (底部操作列) */}
         <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-between items-center gap-3">
            
-           {/* 左側通用功能 */}
+           {/* 左側：通用功能 */}
            <div className="flex items-center gap-3">
              <Link 
                href={`/orders/${order.id}/print`} 
                target="_blank"
-               className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 font-medium flex items-center gap-2"
+               className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 font-medium flex items-center gap-2 shadow-sm"
              >
                <Printer className="w-4 h-4" /> 列印工單
              </Link>
              <button 
                 onClick={handleDelete}
                 disabled={isUpdating}
-                className="px-4 py-2 bg-red-50 text-red-600 border border-red-100 rounded-lg hover:bg-red-100 font-medium flex items-center gap-2"
+                className="px-4 py-2 bg-red-50 text-red-600 border border-red-100 rounded-lg hover:bg-red-100 font-medium flex items-center gap-2 transition-colors"
              >
-               <Trash2 className="w-4 h-4" /> 刪除訂單
+               <Trash2 className="w-4 h-4" /> 刪除
              </button>
            </div>
 
-           {/* 右側狀態流轉按鈕 */}
+           {/* 右側：狀態流轉按鈕 (根據狀態顯示不同按鈕) */}
            <div className="flex gap-2">
-             {/* 狀態 1: 待審核 -> 取消 或 通過 */}
+             
+             {/* 1. 待審核 -> 審核通過 */}
              {order.status === 'pending' && (
                <>
                  <button 
                    onClick={() => handleStatusChange('cancelled')}
                    disabled={isUpdating}
-                   className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-bold"
+                   className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-bold transition-colors"
                  >
-                   拒絕 / 取消
+                   拒絕
                  </button>
                  <button 
                    onClick={() => handleStatusChange('processing')}
                    disabled={isUpdating}
-                   className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold shadow-sm"
+                   className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold shadow-md flex items-center gap-2 transition-colors"
                  >
-                   審核通過 (生產)
+                   <CheckCircle className="w-4 h-4" /> 審核通過
                  </button>
                </>
              )}
 
-             {/* 狀態 2: 生產中 -> 安排出貨 (新增功能) */}
+             {/* 2. 生產中 -> 安排出貨 (這就是您要的按鈕) */}
              {order.status === 'processing' && (
                 <button 
                   onClick={() => handleStatusChange('shipped')}
                   disabled={isUpdating}
-                  className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-bold shadow-sm flex items-center gap-2"
+                  className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-bold shadow-md flex items-center gap-2 transition-colors"
                 >
                   <Truck className="w-4 h-4" /> 安排出貨
                 </button>
              )}
 
-             {/* 狀態 3: 已出貨 -> 標記完工 */}
+             {/* 3. 已出貨 -> 標記完工 */}
              {order.status === 'shipped' && (
                 <button 
                   onClick={() => handleStatusChange('completed')}
                   disabled={isUpdating}
-                  className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-bold shadow-sm"
+                  className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-bold shadow-md flex items-center gap-2 transition-colors"
                 >
-                  標記為已完工
+                  <CheckCircle className="w-4 h-4" /> 標記為已完工
                 </button>
              )}
            </div>
