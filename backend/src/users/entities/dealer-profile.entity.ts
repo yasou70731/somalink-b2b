@@ -1,21 +1,6 @@
-import { Entity, Column, PrimaryGeneratedColumn, OneToOne, JoinColumn } from 'typeorm';
-import { User } from './user.entity';
+import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
 
-export enum DealerLevel {
-  A = 'A',
-  B = 'B',
-  C = 'C',
-}
-
-// 我們保留 Enum 定義給程式碼參考用，但資料庫欄位改用 String
-export enum TradeType {
-  CONSTRUCTION = 'construction', 
-  GLASS = 'glass',               
-  SHOWER_DOOR = 'shower_door',   
-  DESIGN = 'design',             
-  ALUMINUM = 'aluminum',         
-  OTHER = 'other',               
-}
+export type DealerLevel = 'A' | 'B' | 'C';
 
 @Entity()
 export class DealerProfile {
@@ -25,11 +10,8 @@ export class DealerProfile {
   @Column()
   companyName: string;
 
-  @Column({ unique: true })
-  taxId: string;
-
-  @Column()
-  address: string;
+  @Column({ nullable: true })
+  taxId: string; // 統編
 
   @Column()
   contactPerson: string;
@@ -37,24 +19,18 @@ export class DealerProfile {
   @Column()
   phone: string;
 
+  @Column()
+  address: string;
+
   @Column({
     type: 'enum',
-    enum: DealerLevel,
-    default: DealerLevel.C,
+    enum: ['A', 'B', 'C'],
+    default: 'C',
   })
   level: DealerLevel;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
-  walletBalance: number;
-
-  // ✨ 關鍵修正：拿掉 enum 限制，改為一般字串
-  // 這樣才能支援您在後台動態新增的任何類別
-  @Column({ default: 'other' }) 
-  tradeType: string;
-
+  // 用來記錄是否通過書面審核 (可選)
+  // ✨ 補上此欄位以解決 UsersService 中的 TypeScript 錯誤
   @Column({ default: false })
-  isUpgradeable: boolean;
-
-  @OneToOne(() => User, (user) => user.dealerProfile)
-  user: User;
+  isVerified: boolean;
 }
