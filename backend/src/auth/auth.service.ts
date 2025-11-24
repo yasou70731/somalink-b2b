@@ -2,7 +2,6 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import * as bcrypt from 'bcrypt';
-import { AuthPayloadDto } from './dto/create-auth.dto';
 
 @Injectable()
 export class AuthService {
@@ -14,7 +13,6 @@ export class AuthService {
   async validateUser(email: string, pass: string): Promise<any> {
     console.log(`[AuthDebug] 正在嘗試登入 Email: ${email}`);
     
-    // 1. 找使用者
     const user = await this.usersService.findByEmail(email);
     
     if (!user) {
@@ -22,24 +20,23 @@ export class AuthService {
       return null;
     }
 
-    console.log(`[AuthDebug] ✅ 找到使用者 ID: ${user.id}, Role: ${user.role}, IsActive: ${user.isActive}`);
+    console.log(`[AuthDebug] ✅ 找到使用者 ID: ${user.id}, 角色: ${user.role}, IsActive: ${user.isActive}`);
     
-    // 2. 檢查密碼欄位是否存在
     if (!user.password) {
-      console.log(`[AuthDebug] ❌ 資料庫中的密碼欄位是空的 (Password is null/empty)`);
+      console.log(`[AuthDebug] ❌ 資料庫中的密碼欄位是空的`);
       return null;
     }
 
     if (!pass) {
-      console.log(`[AuthDebug] ❌ 前端沒有傳送密碼過來 (Input password is empty)`);
+      console.log(`[AuthDebug] ❌ 介面沒有傳送密碼過來 (輸入 密碼 為 空)`);
       return null;
     }
 
-    // 3. 比對密碼
     const isMatch = await bcrypt.compare(pass, user.password);
     console.log(`[AuthDebug] 🔐 密碼比對結果: ${isMatch ? '成功 (Match)' : '失敗 (Mismatch)'}`);
 
     if (isMatch) {
+      // 這裡會把密碼拿掉，只回傳安全資料
       const { password, ...result } = user;
       return result;
     }
@@ -47,18 +44,14 @@ export class AuthService {
     return null;
   }
 
-  async login(authPayloadDto: AuthPayloadDto) {
-    // 呼叫上面的 validateUser
-    const user = await this.validateUser(authPayloadDto.email, authPayloadDto.password);
+  // ✨ Fix: 修改這裡，直接接收已經驗證過的 user 物件
+  async login(user: any) {
+    // 🛑 刪除這段：不要再驗證一次，因為 user 物件裡已經沒有原始密碼了，再驗證會失敗
+    // const validatedUser = await this.validateUser(...)
     
-    if (!user) {
-      // 這裡丟出的 401 就是您在前端看到的錯誤
-      throw new UnauthorizedException('帳號或密碼錯誤 (驗證流程失敗)');
-    }
-    
+    // 直接發放 Token
     const payload = { email: user.email, sub: user.id, role: user.role };
 
-    // 手動挑選回傳欄位，避免循環參照 (Circular JSON)
     const safeUser = {
       id: user.id,
       email: user.email,
