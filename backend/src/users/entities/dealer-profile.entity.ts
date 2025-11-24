@@ -1,13 +1,13 @@
 import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
 
-// Change DealerLevel from type to enum so it can be used as a value
+// 1. 將 DealerLevel 改為 Enum 並導出，這樣才能作為值使用 (修復 TS2693)
 export enum DealerLevel {
   A = 'A',
   B = 'B',
   C = 'C',
 }
 
-// Define TradeType enum
+// 2. 定義並導出 TradeType Enum (修復 TS2305)
 export enum TradeType {
   GLASS_SHOP = 'glass_shop',
   INTERIOR_DESIGN = 'interior_design',
@@ -45,12 +45,12 @@ export class DealerProfile {
   @Column({ default: false })
   isVerified: boolean;
 
-  // ✨ Added missing fields based on your errors:
+  // ✨ 3. 新增缺失的欄位以修復 TS2339 錯誤：
 
   @Column({
     type: 'enum',
     enum: TradeType,
-    nullable: true, // Set to true if it might not be set initially
+    nullable: true, // 設為 nullable 以避免舊資料出錯
   })
   tradeType: TradeType;
 

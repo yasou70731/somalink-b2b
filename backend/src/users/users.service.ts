@@ -6,7 +6,7 @@ import { User, UserRole } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { TradeCategory } from './entities/trade-category.entity';
-import { DealerProfile, DealerLevel, TradeType } from './entities/dealer-profile.entity'; // ✨ 確保正確引入 Enum
+import { DealerProfile, DealerLevel, TradeType } from './entities/dealer-profile.entity'; // 確保正確引入 Enum
 
 @Injectable()
 export class UsersService {
@@ -53,7 +53,7 @@ export class UsersService {
       profile.isVerified = false;
       profile.walletBalance = 0;
       profile.isUpgradeable = false; 
-      // 如果需要，可以根據 tradeCategory 來設定 tradeType，這裡暫時略過或設預設值
+      // 如果需要，可以根據 tradeCategory 來設定 tradeType
       // profile.tradeType = ... 
       
       user.dealerProfile = profile;
@@ -84,7 +84,7 @@ export class UsersService {
       where: { id },
       relations: ['tradeCategory', 'dealerProfile'],
     });
-    if (!user) throw new NotFoundException(`User #${id} not found`);
+    if (!user) throw new NotFoundException(`找不到用戶 #${id}`);
     return user;
   }
 
@@ -111,26 +111,24 @@ export class UsersService {
     return this.usersRepository.remove(user);
   }
 
-  // ✨ 7. 切換啟用狀態 (toggleActive) - 修復錯誤
+  // ✨ 7. 切換啟用狀態 (toggleActive) - 補上缺失的方法
   async toggleActive(id: string, isActive: boolean) {
     const user = await this.findOne(id);
     user.isActive = isActive;
     return this.usersRepository.save(user);
   }
 
-  // ✨ 8. 更新會員等級 (updateLevel) - 修復錯誤
+  // ✨ 8. 更新會員等級 (updateLevel) - 補上缺失的方法
   async updateLevel(id: string, level: DealerLevel) {
     const user = await this.findOne(id);
     if (user.dealerProfile) {
       user.dealerProfile.level = level;
-      // 因為 dealerProfile 是 cascade update，儲存 user 應該也會更新 profile
-      // 但為了保險，也可以直接儲存 profile
       await this.dealerProfileRepository.save(user.dealerProfile); 
     }
-    return this.usersRepository.save(user);
+    return this.usersRepository.save(user); // 回傳更新後的用戶
   }
 
-  // ✨ 9. 錢包儲值 (deposit) - 修復錯誤
+  // ✨ 9. 錢包儲值 (deposit) - 補上缺失的方法
   async deposit(id: string, amount: number) {
     const user = await this.findOne(id);
     if (!user.dealerProfile) {
@@ -147,14 +145,14 @@ export class UsersService {
     return user;
   }
 
-  // ✨ 10. 升級為管理員 (makeAdmin) - 修復錯誤
+  // ✨ 10. 升級為管理員 (makeAdmin) - 補上缺失的方法
   async makeAdmin(email: string) {
     const user = await this.findByEmail(email);
     if (!user) {
       throw new NotFoundException(`找不到用戶: ${email}`);
     }
     
-    user.role = UserRole.ADMIN; // 使用 Enum
+    user.role = UserRole.ADMIN; // 使用 Enum 設定權限
     return this.usersRepository.save(user);
   }
 }
