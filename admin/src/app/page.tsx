@@ -3,33 +3,13 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
-  LayoutDashboard, Package, Users, Settings, Bell, Search, Filter, 
+  LayoutDashboard, Bell, Search, Filter, 
   CheckCircle, Clock, Info, ChevronRight, FileSpreadsheet, Calendar, User, Truck, Hammer
 } from 'lucide-react';
 import clsx from 'clsx';
 import * as XLSX from 'xlsx';
-import { api, Order } from '@/lib/api'; // ✨ 修改：直接從 @/lib/api 引入 Order 介面
+import { api, Order } from '@/lib/api';
 import OrderDetailModal from '@/components/OrderDetailModal';
-
-// ❌ 移除：原本這裡重複定義且不完整的 Order 介面，這就是導致錯誤的原因
-/*
-interface Order {
-  id: string;
-  orderNumber: string;
-  projectName: string;
-  status: string;
-  totalAmount: string;
-  createdAt: string;
-  product?: { name: string };
-  user?: { 
-    email: string;
-    dealerProfile?: { companyName: string; level: string };
-  };
-  widthMatrix?: any;
-  heightData?: any;
-  serviceType?: string;
-}
-*/
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -37,7 +17,6 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   
-  // 篩選條件狀態
   const [searchTerm, setSearchTerm] = useState('');
   const [dealerFilter, setDealerFilter] = useState('');
   const [dateFilter, setDateFilter] = useState('');
@@ -51,36 +30,37 @@ export default function AdminDashboard() {
   const fetchOrders = useCallback(async () => {
     try {
       const res = await api.get('/orders/all');
-      // 確保 API 回傳的資料符合 Order[] 型別
-      // 如果 TypeScript 仍然報錯，可以使用斷言：setOrders(res as unknown as Order[]);
-      // 但通常如果 api.get 回傳的是 any，直接賦值即可。
-      // 根據 api.ts 定義，api.get 回傳 response.data，所以這裡是正確的。
-      setOrders(res as Order[]); 
+      // ✨ Fix: 確保回傳的是陣列，如果不是陣列（例如 undefined），就給空陣列 []
+      setOrders(Array.isArray(res) ? res : []); 
     } catch (err) {
       console.error('無法取得訂單列表', err);
+      setOrders([]); // 發生錯誤時清空列表，避免 map/filter 崩潰
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    if (localStorage.getItem('somalink_admin_token')) {
+    // 只有在有 token 時才發送請求
+    if (typeof window !== 'undefined' && localStorage.getItem('somalink_admin_token')) {
       fetchOrders();
     }
   }, [fetchOrders]);
 
   // 過濾邏輯
   const filteredOrders = useMemo(() => {
-    return orders.filter(order => {
+    // ✨ Fix: 增加 (orders || []) 確保 orders 即使是 undefined 也不會崩潰
+    return (orders || []).filter(order => {
+      if (!order) return false; // 防止單筆資料為空
+      
       const matchesSearch = 
-        order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (order.orderNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (order.projectName && order.projectName.toLowerCase().includes(searchTerm.toLowerCase()));
       
-      // 因為 Order 介面結構改變，這裡存取 user.dealerProfile 的方式需要配合 api.ts
       const dealerName = order.user?.dealerProfile?.companyName || order.user?.name || '';
       
       const matchesDealer = dealerName.toLowerCase().includes(dealerFilter.toLowerCase());
-      const orderDate = new Date(order.createdAt).toISOString().split('T')[0];
+      const orderDate = order.createdAt ? new Date(order.createdAt).toISOString().split('T')[0] : '';
       const matchesDate = dateFilter ? orderDate === dateFilter : true;
       const matchesStatus = statusFilter === 'all' ? true : order.status === statusFilter;
 
@@ -95,7 +75,6 @@ export default function AdminDashboard() {
       '建立日期': new Date(o.createdAt).toLocaleDateString(),
       '案場名稱': o.projectName,
       '經銷商': o.user?.dealerProfile?.companyName || o.user?.email,
-      // 顯示第一項產品名稱作為代表
       '產品名稱': o.items?.[0]?.product?.name || '多品項',
       '總金額': Number(o.totalAmount),
       '訂單狀態': o.status === 'pending' ? '待審核' : 
@@ -109,7 +88,6 @@ export default function AdminDashboard() {
     XLSX.writeFile(workbook, `SomaLink_Orders_${new Date().toISOString().slice(0,10)}.xlsx`);
   };
 
-  // 狀態顯示設定
   const statusMap: Record<string, any> = {
     pending: { label: '待審核', color: 'bg-yellow-100 text-yellow-800', icon: Clock },
     processing: { label: '生產中', color: 'bg-blue-100 text-blue-800', icon: Hammer },
@@ -118,7 +96,6 @@ export default function AdminDashboard() {
     cancelled: { label: '已取消', color: 'bg-gray-100 text-gray-600', icon: Info },
   };
 
-  // 取得按鈕文字與樣式
   const getActionButton = (status: string) => {
     switch (status) {
       case 'pending': return { text: '審核', style: 'text-blue-600 hover:text-blue-800' };
@@ -271,62 +248,14 @@ export default function AdminDashboard() {
                     const StatusIcon = status.icon;
                     const action = getActionButton(order.status as string); 
 
-                    // 顯示第一項產品名稱，如果有多個則顯示 +N
+                    // ✨ Fix: 增加 ?. 避免 items 為空時崩潰
                     const firstItem = order.items?.[0];
                     const productSummary = firstItem ? (
                         <>
-                            {firstItem.product.name} 
+                            {firstItem.product?.name} 
                             {order.items.length > 1 && <span className="text-xs text-gray-400 ml-1">+{order.items.length - 1}</span>}
                         </>
                     ) : '無商品';
 
                     return (
-                      <tr key={order.id} className="hover:bg-blue-50/30 transition-colors group">
-                        <td className="px-6 py-4">
-                          <div className="flex flex-col">
-                            <span className="text-sm font-bold text-gray-900 group-hover:text-blue-600">{order.orderNumber}</span>
-                            <span className="text-xs text-gray-500 mt-0.5">{order.projectName || '未命名案場'}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex flex-col">
-                            <span className="text-sm text-gray-900 font-medium">{order.user?.dealerProfile?.companyName || '未知'}</span>
-                          </div>
-                        </td>
-                        {/* 顯示產品概要 */}
-                        <td className="px-6 py-4 text-sm text-gray-600">{productSummary}</td>
-                        <td className="px-6 py-4 text-sm font-bold text-blue-600">${Number(order.totalAmount).toLocaleString()}</td>
-                        <td className="px-6 py-4 text-xs text-gray-500">{new Date(order.createdAt).toLocaleDateString()}</td>
-                        <td className="px-6 py-4">
-                          <span className={clsx("px-2.5 py-1 rounded-full text-xs font-bold flex items-center w-fit gap-1.5 border", status.color, "border-transparent")}>
-                            <StatusIcon className="w-3.5 h-3.5" />
-                            {status.label}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <button 
-                            onClick={() => setSelectedOrder(order)} 
-                            className={clsx("font-medium text-sm flex items-center justify-end gap-1 transition-colors", action.style)}
-                          >
-                            {action.text} <ChevronRight className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })
-                }
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      <OrderDetailModal 
-        order={selectedOrder}
-        isOpen={!!selectedOrder}
-        onClose={() => setSelectedOrder(null)}
-        onStatusUpdate={fetchOrders} 
-      />
-    </main>
-  );
-}
+                      <tr key={

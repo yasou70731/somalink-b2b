@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-// 優先讀取環境變數，否則使用預設值 (Render Backend)
+// 優先讀取環境變數，否則使用預設值
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://somalink-backend.onrender.com';
 
 // 定義單一品項的介面
@@ -10,7 +10,7 @@ export interface OrderItem {
     name: string;
     imageUrl?: string;
   };
-  serviceType: string; // 後台可以寬鬆一點用 string，或是同步用 'material' | 'assembled'
+  serviceType: string;
   widthMatrix: { top: number; mid: number; bot: number };
   heightData: any;
   isCeilingMounted: boolean;
@@ -24,29 +24,26 @@ export interface OrderItem {
   priceSnapshot?: any;
 }
 
-// 定義訂單狀態 Enum (與前端同步)
 export enum OrderStatus {
-  PENDING = 'pending',       // 待審核
-  PROCESSING = 'processing', // 生產中
-  SHIPPED = 'shipped',       // 已出貨 (新增)
-  COMPLETED = 'completed',   // 已完成
-  CANCELLED = 'cancelled',   // 已取消
+  PENDING = 'pending',       
+  PROCESSING = 'processing', 
+  SHIPPED = 'shipped',       
+  COMPLETED = 'completed',   
+  CANCELLED = 'cancelled',   
 }
 
-// 定義訂單介面
 export interface Order {
   id: string;
   orderNumber: string;
-  status: OrderStatus | string; // 兼容 string 以防後端回傳格式差異
+  status: OrderStatus | string;
   totalAmount: number;
   createdAt: string;
   projectName: string;
   
-  // 使用者資訊 (後台需要顯示這些)
   user: {
     id: string;
     email: string;
-    name: string; // 可能是 nickname 或 dealerProfile 的名稱
+    name: string;
     dealerProfile?: {
       companyName: string;
       contactPerson: string;
@@ -55,15 +52,12 @@ export interface Order {
     };
   };
 
-  // ✨ 這裡必須是 items 陣列
   items: OrderItem[]; 
   
-  // 備註欄位 (選填)
   adminNote?: string;
   customerNote?: string;
 }
 
-// 建立 Axios 實例
 const axiosInstance = axios.create({
   baseURL: API_URL,
   headers: {
@@ -71,10 +65,11 @@ const axiosInstance = axios.create({
   },
 });
 
-// ✨ 修正：攔截器讀取 Token 的名稱必須與登入頁儲存的名稱一致 ('somalink_admin_token')
+// ✨ Fix: 這裡的 Key 必須跟登入頁存的一模一樣 ('somalink_admin_token')
 axiosInstance.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
-    // 這裡原本是 'admin_token'，已修正為 'somalink_admin_token'
+    // 🔴 錯誤原本是：const token = localStorage.getItem('admin_token');
+    // ✅ 修正為：
     const token = localStorage.getItem('somalink_admin_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -83,7 +78,6 @@ axiosInstance.interceptors.request.use((config) => {
   return config;
 });
 
-// 封裝 API 方法
 export const api = {
   get: async (url: string) => {
     const response = await axiosInstance.get(url);
@@ -101,13 +95,11 @@ export const api = {
     const response = await axiosInstance.delete(url);
     return response.data;
   },
-  // 圖片上傳功能 (後台專用)
   uploadImage: async (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('upload_preset', 'somalink_preset'); // 請確認您的 Cloudinary Preset 名稱
+    formData.append('upload_preset', 'somalink_preset');
     
-    // 直接上傳到 Cloudinary (不經過您的後端以節省流量)
     const res = await axios.post(
       'https://api.cloudinary.com/v1_1/dnibj8za6/image/upload', 
       formData
