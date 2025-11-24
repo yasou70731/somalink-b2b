@@ -48,26 +48,27 @@ export class ReportsService {
       total: monthlyStats[month]
     })).slice(-6); 
 
-    // ✨ 5. 新增：熱銷產品排行 (Top 5 Products)
-    // 統計產品名稱出現的次數
-    // 注意：這裡需要關聯 product 才能抓到名稱，但我們的 Order 已經有 product 關聯
+    // ✨ 5. 修正：熱銷產品排行 (透過 OrderItem 關聯查詢)
     const productStats = await this.ordersRepo.createQueryBuilder('order')
-      .leftJoinAndSelect('order.product', 'product')
+      .leftJoin('order.items', 'item')         // 先連到 items
+      .leftJoin('item.product', 'product')     // 再從 item 連到 product
       .select('product.name', 'name')
-      .addSelect('COUNT(order.id)', 'count')
-      .addSelect('SUM(order.totalAmount)', 'revenue') // 順便算該產品的總營收
+      .addSelect('SUM(item.quantity)', 'count') // 改為統計銷售數量
+      .addSelect('SUM(item.subtotal)', 'revenue') 
       .where('order.status != :status', { status: 'cancelled' })
       .groupBy('product.name')
       .orderBy('count', 'DESC')
-      .limit(5) // 取前 5 名
+      .limit(5)
       .getRawMany();
 
-    // ✨ 6. 新增：熱銷顏色排行 (Top 5 Colors)
+    // ✨ 6. 修正：熱銷顏色排行 (透過 OrderItem 查詢)
+    // 顏色資訊在 OrderItem 上 (item.colorName)
     const colorStats = await this.ordersRepo.createQueryBuilder('order')
-      .select('order.colorName', 'name')
-      .addSelect('COUNT(order.id)', 'count')
+      .leftJoin('order.items', 'item')         // 必須 Join items
+      .select('item.colorName', 'name')        // 選取 item 的顏色
+      .addSelect('SUM(item.quantity)', 'count') // 統計數量
       .where('order.status != :status', { status: 'cancelled' })
-      .groupBy('order.colorName')
+      .groupBy('item.colorName')
       .orderBy('count', 'DESC')
       .limit(5)
       .getRawMany();
@@ -77,8 +78,8 @@ export class ReportsService {
       totalOrders,
       statusDist,
       trendData,
-      productStats, // 回傳產品排行
-      colorStats,   // 回傳顏色排行
+      productStats,
+      colorStats,
     };
   }
 }
