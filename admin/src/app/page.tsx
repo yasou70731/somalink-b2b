@@ -13,6 +13,7 @@ import OrderDetailModal from '@/components/OrderDetailModal';
 
 export default function AdminDashboard() {
   const router = useRouter();
+  // ✨ Fix: 初始值給空陣列
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -23,6 +24,7 @@ export default function AdminDashboard() {
   const [statusFilter, setStatusFilter] = useState('all');
 
   useEffect(() => {
+    // ✨ Fix: 檢查正確的 token key
     const token = localStorage.getItem('somalink_admin_token');
     if (!token) { router.push('/login'); }
   }, [router]);
@@ -30,23 +32,23 @@ export default function AdminDashboard() {
   const fetchOrders = useCallback(async () => {
     try {
       const res = await api.get('/orders/all');
-      // ✨ Fix: 強制確認回傳的是陣列，若 API 失敗回傳 undefined，則設為空陣列
+      // ✨ Fix: 雙重保險，如果回傳的不是陣列，強制設為空陣列，避免頁面崩潰
       if (Array.isArray(res)) {
         setOrders(res);
       } else {
-        console.warn('API 回傳格式非陣列:', res);
-        setOrders([]);
+        console.warn('API 回傳格式異常:', res);
+        setOrders([]); 
       }
     } catch (err) {
       console.error('無法取得訂單列表', err);
-      // ✨ Fix: 發生錯誤時確保清空，避免 undefined 導致 filter 崩潰
-      setOrders([]); 
+      setOrders([]); // 失敗時清空
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    // ✨ Fix: 檢查正確的 token key
     if (typeof window !== 'undefined' && localStorage.getItem('somalink_admin_token')) {
       fetchOrders();
     }
@@ -54,7 +56,7 @@ export default function AdminDashboard() {
 
   // 過濾邏輯
   const filteredOrders = useMemo(() => {
-    // ✨ Fix: 增加 (orders || []) 雙重保險
+    // ✨ Fix: (orders || []) 確保即使 orders 是 undefined 也不會當機
     return (orders || []).filter(order => {
       if (!order) return false;
       
@@ -65,7 +67,6 @@ export default function AdminDashboard() {
       const dealerName = order.user?.dealerProfile?.companyName || order.user?.name || '';
       
       const matchesDealer = dealerName.toLowerCase().includes(dealerFilter.toLowerCase());
-      
       const orderDate = order.createdAt ? new Date(order.createdAt).toISOString().split('T')[0] : '';
       const matchesDate = dateFilter ? orderDate === dateFilter : true;
       const matchesStatus = statusFilter === 'all' ? true : order.status === statusFilter;
@@ -128,7 +129,6 @@ export default function AdminDashboard() {
 
       <div className="flex-1 overflow-y-auto p-8">
         
-        {/* KPI Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
             <p className="text-sm text-gray-500 font-medium uppercase tracking-wider">篩選結果筆數</p>
@@ -152,10 +152,8 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Order Table */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           
-          {/* 篩選工具列 */}
           <div className="p-5 border-b border-gray-100 bg-gray-50/50 flex flex-wrap items-center gap-4">
             
             <div className="relative w-64">
@@ -254,7 +252,6 @@ export default function AdminDashboard() {
                     const StatusIcon = status.icon;
                     const action = getActionButton(order.status as string); 
 
-                    // ✨ Fix: 增加 ?. 避免 items 為空時崩潰
                     const firstItem = order.items?.[0];
                     const productSummary = firstItem ? (
                         <>

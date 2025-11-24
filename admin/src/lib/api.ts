@@ -1,15 +1,11 @@
 import axios from 'axios';
 
-// 優先讀取環境變數，否則使用預設值
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://somalink-backend.onrender.com';
 
-// 定義單一品項的介面
+// ... (介面定義保持不變) ...
 export interface OrderItem {
   id: string;
-  product: { 
-    name: string;
-    imageUrl?: string;
-  };
+  product: { name: string; imageUrl?: string; };
   serviceType: string;
   widthMatrix: { top: number; mid: number; bot: number };
   heightData: any;
@@ -39,7 +35,6 @@ export interface Order {
   totalAmount: number;
   createdAt: string;
   projectName: string;
-  
   user: {
     id: string;
     email: string;
@@ -51,9 +46,7 @@ export interface Order {
       address: string;
     };
   };
-
   items: OrderItem[]; 
-  
   adminNote?: string;
   customerNote?: string;
 }
@@ -65,10 +58,10 @@ const axiosInstance = axios.create({
   },
 });
 
-// ✨ Fix: 修正 Token 讀取名稱，必須與登入頁一致 ('somalink_admin_token')
+// ✨ Fix: 這裡必須改成 'somalink_admin_token'，跟登入頁一致！
 axiosInstance.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
-    // 🔴 修正點在此：
+    // 🔴 請確認這裡已經改過來了！
     const token = localStorage.getItem('somalink_admin_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -98,7 +91,6 @@ export const api = {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('upload_preset', 'somalink_preset');
-    
     const res = await axios.post(
       'https://api.cloudinary.com/v1_1/dnibj8za6/image/upload', 
       formData
