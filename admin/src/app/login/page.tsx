@@ -25,8 +25,8 @@ export default function AdminLoginPage() {
       const response = await api.post('/auth/login', formData);
       const { access_token, user } = response.data;
 
-      // 2. 檢查是否為管理員 (關鍵！)
-      if (user.role !== 'admin') {
+      // 2. 檢查是否為管理員 (✨ 修正：允許大寫 ADMIN 或小寫 admin)
+      if (user.role !== 'ADMIN' && user.role !== 'admin') {
         setErrorMsg('權限不足：您不是系統管理員');
         setIsLoading(false);
         return;
@@ -41,8 +41,9 @@ export default function AdminLoginPage() {
 
     } catch (err: any) {
       console.error('登入失敗:', err);
+      // 顯示更詳細的錯誤資訊
       if (err.response?.status === 401) {
-        setErrorMsg('帳號或密碼錯誤');
+        setErrorMsg('帳號或密碼錯誤，或帳號尚未開通');
       } else {
         setErrorMsg('系統連線錯誤，請確認後端是否啟動');
       }
@@ -59,7 +60,6 @@ export default function AdminLoginPage() {
           <div className="mx-auto h-16 w-16 bg-slate-800 rounded-xl flex items-center justify-center text-white mb-6 shadow-lg">
             <ShieldCheck className="w-8 h-8" />
           </div>
-          {/* ✨ 修改這裡：改成 松成有限公司 */}
           <h2 className="text-3xl font-extrabold text-slate-900">
             松成有限公司
           </h2>

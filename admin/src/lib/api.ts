@@ -71,10 +71,11 @@ const axiosInstance = axios.create({
   },
 });
 
-// 後台通常存成 'admin_token'，這裡要注意與前台的區別
+// ✨ 修正：攔截器讀取 Token 的名稱必須與登入頁儲存的名稱一致 ('somalink_admin_token')
 axiosInstance.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('admin_token');
+    // 這裡原本是 'admin_token'，已修正為 'somalink_admin_token'
+    const token = localStorage.getItem('somalink_admin_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
