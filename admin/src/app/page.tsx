@@ -30,18 +30,23 @@ export default function AdminDashboard() {
   const fetchOrders = useCallback(async () => {
     try {
       const res = await api.get('/orders/all');
-      // ✨ Fix: 確保回傳的是陣列，如果不是陣列（例如 undefined），就給空陣列 []
-      setOrders(Array.isArray(res) ? res : []); 
+      // ✨ Fix: 強制確認回傳的是陣列，若 API 失敗回傳 undefined，則設為空陣列
+      if (Array.isArray(res)) {
+        setOrders(res);
+      } else {
+        console.warn('API 回傳格式非陣列:', res);
+        setOrders([]);
+      }
     } catch (err) {
       console.error('無法取得訂單列表', err);
-      setOrders([]); // 發生錯誤時清空列表，避免 map/filter 崩潰
+      // ✨ Fix: 發生錯誤時確保清空，避免 undefined 導致 filter 崩潰
+      setOrders([]); 
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    // 只有在有 token 時才發送請求
     if (typeof window !== 'undefined' && localStorage.getItem('somalink_admin_token')) {
       fetchOrders();
     }
@@ -49,9 +54,9 @@ export default function AdminDashboard() {
 
   // 過濾邏輯
   const filteredOrders = useMemo(() => {
-    // ✨ Fix: 增加 (orders || []) 確保 orders 即使是 undefined 也不會崩潰
+    // ✨ Fix: 增加 (orders || []) 雙重保險
     return (orders || []).filter(order => {
-      if (!order) return false; // 防止單筆資料為空
+      if (!order) return false;
       
       const matchesSearch = 
         (order.orderNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -60,6 +65,7 @@ export default function AdminDashboard() {
       const dealerName = order.user?.dealerProfile?.companyName || order.user?.name || '';
       
       const matchesDealer = dealerName.toLowerCase().includes(dealerFilter.toLowerCase());
+      
       const orderDate = order.createdAt ? new Date(order.createdAt).toISOString().split('T')[0] : '';
       const matchesDate = dateFilter ? orderDate === dateFilter : true;
       const matchesStatus = statusFilter === 'all' ? true : order.status === statusFilter;
@@ -252,10 +258,57 @@ export default function AdminDashboard() {
                     const firstItem = order.items?.[0];
                     const productSummary = firstItem ? (
                         <>
-                            {firstItem.product?.name} 
+                            {firstItem.product?.name || '未知產品'} 
                             {order.items.length > 1 && <span className="text-xs text-gray-400 ml-1">+{order.items.length - 1}</span>}
                         </>
                     ) : '無商品';
 
                     return (
-                      <tr key={
+                      <tr key={order.id} className="hover:bg-blue-50/30 transition-colors group">
+                        <td className="px-6 py-4">
+                          <div className="flex flex-col">
+                            <span className="text-sm font-bold text-gray-900 group-hover:text-blue-600">{order.orderNumber}</span>
+                            <span className="text-xs text-gray-500 mt-0.5">{order.projectName || '未命名案場'}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex flex-col">
+                            <span className="text-sm text-gray-900 font-medium">{order.user?.dealerProfile?.companyName || '未知'}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-600">{productSummary}</td>
+                        <td className="px-6 py-4 text-sm font-bold text-blue-600">${Number(order.totalAmount).toLocaleString()}</td>
+                        <td className="px-6 py-4 text-xs text-gray-500">{new Date(order.createdAt).toLocaleDateString()}</td>
+                        <td className="px-6 py-4">
+                          <span className={clsx("px-2.5 py-1 rounded-full text-xs font-bold flex items-center w-fit gap-1.5 border", status.color, "border-transparent")}>
+                            <StatusIcon className="w-3.5 h-3.5" />
+                            {status.label}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <button 
+                            onClick={() => setSelectedOrder(order)} 
+                            className={clsx("font-medium text-sm flex items-center justify-end gap-1 transition-colors", action.style)}
+                          >
+                            {action.text} <ChevronRight className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <OrderDetailModal 
+        order={selectedOrder}
+        isOpen={!!selectedOrder}
+        onClose={() => setSelectedOrder(null)}
+        onStatusUpdate={fetchOrders} 
+      />
+    </main>
+  );
+}

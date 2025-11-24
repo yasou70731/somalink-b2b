@@ -65,11 +65,10 @@ const axiosInstance = axios.create({
   },
 });
 
-// ✨ Fix: 這裡的 Key 必須跟登入頁存的一模一樣 ('somalink_admin_token')
+// ✨ Fix: 修正 Token 讀取名稱，必須與登入頁一致 ('somalink_admin_token')
 axiosInstance.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
-    // 🔴 錯誤原本是：const token = localStorage.getItem('admin_token');
-    // ✅ 修正為：
+    // 🔴 修正點在此：
     const token = localStorage.getItem('somalink_admin_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
