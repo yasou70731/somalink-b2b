@@ -27,9 +27,15 @@ import { NotificationsModule } from './notifications/notifications.module';
       database: process.env.DB_DATABASE,
       autoLoadEntities: true,
       synchronize: true, // 注意：生產環境建議改為 false，但在開發初期設為 true 可自動建表
-      ssl: process.env.NODE_ENV === 'production' || process.env.DATABASE_URL?.includes('neon.tech') ? {
+      ssl: {
         rejectUnauthorized: false, // 允許自我簽署憑證 (解決 Render/Neon SSL 問題)
-      } : false,
+      },
+      // 如果上述 ssl 設定仍無效，有些驅動程式需要 extra 屬性：
+      // extra: {
+      //   ssl: {
+      //     rejectUnauthorized: false,
+      //   },
+      // },
     }),
     UsersModule,
     AuthModule,
