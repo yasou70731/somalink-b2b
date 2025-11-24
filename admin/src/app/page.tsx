@@ -13,6 +13,7 @@ import OrderDetailModal from '@/components/OrderDetailModal';
 
 export default function AdminDashboard() {
   const router = useRouter();
+  // ✨ Fix: 預設值給空陣列 []
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -29,19 +30,19 @@ export default function AdminDashboard() {
 
   const fetchOrders = useCallback(async () => {
     try {
-      // ✨ 修正重點：拿掉 "/all"，改成 "/orders"
-      // 這樣才會對應到後端的 @Get() findAll，而不是 @Get(':id') findOne
+      setLoading(true);
       const res = await api.get('/orders');
       
+      // ✨ Fix: 嚴格檢查回傳值是否為陣列
       if (Array.isArray(res)) {
         setOrders(res);
       } else {
-        console.warn('API 回傳格式異常:', res);
+        console.warn('API 回傳格式異常 (非陣列):', res);
         setOrders([]); 
       }
     } catch (err) {
       console.error('無法取得訂單列表', err);
-      setOrders([]); 
+      setOrders([]); // 錯誤時確保是空陣列
     } finally {
       setLoading(false);
     }
@@ -55,6 +56,7 @@ export default function AdminDashboard() {
 
   // 過濾邏輯
   const filteredOrders = useMemo(() => {
+    // ✨ Fix: 加入 (orders || []) 保護
     return (orders || []).filter(order => {
       if (!order) return false;
       
@@ -243,9 +245,12 @@ export default function AdminDashboard() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {loading ? <tr><td colSpan={7} className="text-center py-12 text-gray-500">資料載入中...</td></tr> : 
-                 filteredOrders.length === 0 ? <tr><td colSpan={7} className="text-center py-12 text-gray-500">查無符合條件的訂單</td></tr> : 
-                 filteredOrders.map((order) => {
+                {loading ? (
+                  <tr><td colSpan={7} className="text-center py-12 text-gray-500">資料載入中...</td></tr>
+                ) : filteredOrders.length === 0 ? (
+                  <tr><td colSpan={7} className="text-center py-12 text-gray-500">查無符合條件的訂單</td></tr>
+                ) : (
+                  filteredOrders.map((order) => {
                     const status = statusMap[order.status as string] || { label: order.status, color: 'bg-gray-100', icon: Info };
                     const StatusIcon = status.icon;
                     const action = getActionButton(order.status as string); 
@@ -291,7 +296,7 @@ export default function AdminDashboard() {
                       </tr>
                     );
                   })
-                }
+                )}
               </tbody>
             </table>
           </div>
