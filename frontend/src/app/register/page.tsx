@@ -31,22 +31,19 @@ export default function RegisterPage() {
     tradeCategoryId: '',
   });
 
-  // 載入營業類別
+  // ✨ 修正：載入真實的營業類別
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        // 假設後端有這支 API，若沒有可先忽略或寫死
-        // const res = await api.get('/trade-categories'); 
-        // setCategories(res);
-        
-        // 暫時模擬資料 (避免頁面壞掉)
-        setCategories([
-          { id: 'cat_glass', name: '玻璃行 / 加工廠' },
-          { id: 'cat_design', name: '室內設計 / 裝修' },
-          { id: 'cat_other', name: '其他建材同業' },
-        ]);
+        // 從後端 API 取得資料 (這樣才會拿到正確的 UUID)
+        const res = await api.get('/trade-categories');
+        // 兼容 API 回傳可能是陣列或 { data: [] } 的格式
+        const data = Array.isArray(res) ? res : (res.data || []);
+        setCategories(data);
       } catch (err) {
         console.error('Failed to fetch categories', err);
+        // 如果抓不到資料 (例如後端沒開放權限)，至少給一個空陣列，不要用假資料害自己
+        setCategories([]); 
       }
     };
     fetchCategories();
@@ -68,12 +65,13 @@ export default function RegisterPage() {
     setIsSubmitting(true);
 
     try {
-      // ✨ 資料清理：確保 tradeCategoryId 若為空字串則轉為 undefined 或 null
+      // 構建傳送給後端的資料
       const payload = {
         email: formData.email,
         password: formData.password,
         name: formData.name,
-        tradeCategoryId: formData.tradeCategoryId || undefined, // 關鍵修正
+        // ✨ 關鍵修正：如果是空字串，轉為 undefined，避免後端查詢出錯
+        tradeCategoryId: formData.tradeCategoryId || undefined,
         dealerProfile: {
           companyName: formData.companyName,
           taxId: formData.taxId,
@@ -90,7 +88,6 @@ export default function RegisterPage() {
 
     } catch (error: any) {
       console.error(error);
-      // 顯示後端回傳的錯誤訊息
       const message = error.response?.data?.message || '註冊失敗，請稍後再試';
       setErrorMsg(Array.isArray(message) ? message[0] : message);
     } finally {
@@ -169,7 +166,6 @@ export default function RegisterPage() {
               </div>
             </div>
 
-            {/* ✨ 這裡使用了優化後的 class: grow, shrink-0 */}
             <div className="relative flex py-2 items-center">
               <div className="grow border-t border-gray-200"></div>
               <span className="shrink-0 mx-4 text-gray-400 text-xs">公司資料</span>
@@ -265,6 +261,7 @@ export default function RegisterPage() {
                   />
                 </div>
               </div>
+
             </div>
 
           </div>
