@@ -22,10 +22,12 @@ export default function AdminLoginPage() {
 
     try {
       // 1. 呼叫後端登入
-      const response = await api.post('/auth/login', formData);
-      const { access_token, user } = response.data;
+      // ✨ Fix: api.post 已經回傳 data，所以直接解構即可，不需要再寫 .data
+      const data = await api.post('/auth/login', formData);
+      const { access_token, user } = data;
 
-      // 2. 檢查是否為管理員 (✨ 修正：允許大寫 ADMIN 或小寫 admin)
+      // 2. 檢查是否為管理員
+      // ✨ Fix: 同時允許大寫 ADMIN (後端預設) 與小寫 admin
       if (user.role !== 'ADMIN' && user.role !== 'admin') {
         setErrorMsg('權限不足：您不是系統管理員');
         setIsLoading(false);
@@ -41,11 +43,11 @@ export default function AdminLoginPage() {
 
     } catch (err: any) {
       console.error('登入失敗:', err);
-      // 顯示更詳細的錯誤資訊
       if (err.response?.status === 401) {
-        setErrorMsg('帳號或密碼錯誤，或帳號尚未開通');
+        setErrorMsg('帳號或密碼錯誤');
       } else {
-        setErrorMsg('系統連線錯誤，請確認後端是否啟動');
+        // 顯示具體的錯誤訊息，方便除錯
+        setErrorMsg(err.message || '系統連線錯誤');
       }
     } finally {
       setIsLoading(false);
