@@ -52,11 +52,11 @@ export default function AdminDashboard() {
     try {
       const res = await api.get('/orders/all');
       // 確保 API 回傳的資料符合 Order[] 型別，通常 API 回傳的就是正確結構
-      setOrders(res); // api.get 已經在 lib/api.ts 裡處理過 .data 了，這裡直接拿 res 即可 (如果您的 api.get 實作是 return response.data)
-                      // 如果 api.get 回傳的是 response，則用 res.data
-                      // 根據您提供的 admin/src/lib/api.ts，api.get 是回傳 response.data，所以這裡應該是 setOrders(res)
-                      // 但如果您的後端回傳結構是 { data: [...] }，則需視情況調整。
-                      // 假設後端回傳的是直接的 Order 陣列。
+      // api.get 已經在 lib/api.ts 裡處理過 .data 了，這裡直接拿 res 即可
+      // 假設後端回傳的是直接的 Order 陣列。
+      // 如果 api.get 回傳的是 response.data (即 Order[])，這裡就對了。
+      // 如果 TypeScript 仍然抱怨 res 不是 Order[]，可能需要斷言: setOrders(res as Order[]);
+      setOrders(res as Order[]); 
     } catch (err) {
       console.error('無法取得訂單列表', err);
     } finally {
