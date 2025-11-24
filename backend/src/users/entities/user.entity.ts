@@ -2,7 +2,7 @@ import { Entity, Column, PrimaryGeneratedColumn, OneToOne, JoinColumn, ManyToOne
 import { DealerProfile } from './dealer-profile.entity';
 import { TradeCategory } from './trade-category.entity';
 
-// ✨ 關鍵修正：改成 export enum，讓它成為一個真實物件，解決 DTO 引用問題
+// 定義 UserRole Enum
 export enum UserRole {
   ADMIN = 'ADMIN',
   DEALER = 'DEALER',
@@ -19,12 +19,13 @@ export class User {
   @Column()
   password: string; // 加密後的密碼
 
-  @Column()
-  name: string; // 使用者名稱 (或聯絡人姓名)
+  // ✨ 修改：暫時允許 name 為空 (nullable: true)，解決部署時的舊資料衝突
+  @Column({ nullable: true })
+  name: string; 
 
   @Column({
     type: 'enum',
-    enum: UserRole, // 使用 Enum
+    enum: UserRole,
     default: UserRole.DEALER,
   })
   role: UserRole;
@@ -38,7 +39,6 @@ export class User {
   @JoinColumn()
   dealerProfile: DealerProfile;
 
-  // ✨ 修正：允許為 null (TradeCategory | null)，避免註冊時若未選類別發生錯誤
   @ManyToOne(() => TradeCategory, { eager: true, nullable: true })
   tradeCategory: TradeCategory | null;
 
