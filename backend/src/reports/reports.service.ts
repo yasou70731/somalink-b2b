@@ -48,25 +48,24 @@ export class ReportsService {
       total: monthlyStats[month]
     })).slice(-6); 
 
-    // ✨ 5. 修正：熱銷產品排行 (透過 OrderItem 關聯查詢)
+    // ✨ Fix 5: 熱銷產品排行 (修正關聯路徑: Order -> OrderItem -> Product)
     const productStats = await this.ordersRepo.createQueryBuilder('order')
-      .leftJoin('order.items', 'item')         // 先連到 items
-      .leftJoin('item.product', 'product')     // 再從 item 連到 product
+      .leftJoin('order.items', 'item')      // 先連到 items
+      .leftJoin('item.product', 'product')  // 再從 item 連到 product
       .select('product.name', 'name')
-      .addSelect('SUM(item.quantity)', 'count') // 改為統計銷售數量
-      .addSelect('SUM(item.subtotal)', 'revenue') 
+      .addSelect('COUNT(order.id)', 'count')
+      .addSelect('SUM(order.totalAmount)', 'revenue')
       .where('order.status != :status', { status: 'cancelled' })
       .groupBy('product.name')
       .orderBy('count', 'DESC')
       .limit(5)
       .getRawMany();
 
-    // ✨ 6. 修正：熱銷顏色排行 (透過 OrderItem 查詢)
-    // 顏色資訊在 OrderItem 上 (item.colorName)
+    // ✨ Fix 6: 熱銷顏色排行 (修正為從 OrderItem 統計顏色)
     const colorStats = await this.ordersRepo.createQueryBuilder('order')
-      .leftJoin('order.items', 'item')         // 必須 Join items
-      .select('item.colorName', 'name')        // 選取 item 的顏色
-      .addSelect('SUM(item.quantity)', 'count') // 統計數量
+      .leftJoin('order.items', 'item')      // 顏色資訊在 item 上
+      .select('item.colorName', 'name')
+      .addSelect('COUNT(order.id)', 'count')
       .where('order.status != :status', { status: 'cancelled' })
       .groupBy('item.colorName')
       .orderBy('count', 'DESC')
