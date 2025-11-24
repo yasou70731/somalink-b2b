@@ -11,14 +11,14 @@ import * as XLSX from 'xlsx';
 import { api, Order } from '@/lib/api'; // ✨ 修改：直接從 @/lib/api 引入 Order 介面
 import OrderDetailModal from '@/components/OrderDetailModal';
 
-// ❌ 移除：原本這裡重複定義且不完整的 Order 介面
+// ❌ 移除：原本這裡重複定義且不完整的 Order 介面，這就是導致錯誤的原因
 /*
 interface Order {
   id: string;
   orderNumber: string;
   projectName: string;
   status: string;
-  totalAmount: string; // 注意：api.ts 裡可能是 number
+  totalAmount: string;
   createdAt: string;
   product?: { name: string };
   user?: { 
@@ -51,11 +51,10 @@ export default function AdminDashboard() {
   const fetchOrders = useCallback(async () => {
     try {
       const res = await api.get('/orders/all');
-      // 確保 API 回傳的資料符合 Order[] 型別，通常 API 回傳的就是正確結構
-      // api.get 已經在 lib/api.ts 裡處理過 .data 了，這裡直接拿 res 即可
-      // 假設後端回傳的是直接的 Order 陣列。
-      // 如果 api.get 回傳的是 response.data (即 Order[])，這裡就對了。
-      // 如果 TypeScript 仍然抱怨 res 不是 Order[]，可能需要斷言: setOrders(res as Order[]);
+      // 確保 API 回傳的資料符合 Order[] 型別
+      // 如果 TypeScript 仍然報錯，可以使用斷言：setOrders(res as unknown as Order[]);
+      // 但通常如果 api.get 回傳的是 any，直接賦值即可。
+      // 根據 api.ts 定義，api.get 回傳 response.data，所以這裡是正確的。
       setOrders(res as Order[]); 
     } catch (err) {
       console.error('無法取得訂單列表', err);
@@ -77,8 +76,7 @@ export default function AdminDashboard() {
         order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (order.projectName && order.projectName.toLowerCase().includes(searchTerm.toLowerCase()));
       
-      // 因為 Order 介面結構改變，這裡存取 user.dealerProfile 的方式可能需要確認
-      // 根據 lib/api.ts，user 結構包含 dealerProfile
+      // 因為 Order 介面結構改變，這裡存取 user.dealerProfile 的方式需要配合 api.ts
       const dealerName = order.user?.dealerProfile?.companyName || order.user?.name || '';
       
       const matchesDealer = dealerName.toLowerCase().includes(dealerFilter.toLowerCase());
@@ -97,10 +95,8 @@ export default function AdminDashboard() {
       '建立日期': new Date(o.createdAt).toLocaleDateString(),
       '案場名稱': o.projectName,
       '經銷商': o.user?.dealerProfile?.companyName || o.user?.email,
-      // '會員等級': o.user?.dealerProfile?.level, // lib/api.ts 的 Order 介面可能沒有 level，需確認
-      // 如果需要顯示第一項產品名稱作為代表
+      // 顯示第一項產品名稱作為代表
       '產品名稱': o.items?.[0]?.product?.name || '多品項',
-      // '交易模式': o.serviceType === 'assembled' ? '含代工' : '純材料', // 這現在是在 items 裡
       '總金額': Number(o.totalAmount),
       '訂單狀態': o.status === 'pending' ? '待審核' : 
                   o.status === 'processing' ? '生產中' : 
@@ -295,10 +291,6 @@ export default function AdminDashboard() {
                         <td className="px-6 py-4">
                           <div className="flex flex-col">
                             <span className="text-sm text-gray-900 font-medium">{order.user?.dealerProfile?.companyName || '未知'}</span>
-                            {/* 如果 api.ts 的 Order 沒有定義 level，這裡可以拿掉或選用其他欄位 */}
-                            {/* <div className="flex items-center gap-2 mt-1">
-                              <span className="px-1.5 py-0.5 rounded text-[10px] bg-gray-100 text-gray-600 border">{order.user?.dealerProfile?.level || '?'} 級</span>
-                            </div> */}
                           </div>
                         </td>
                         {/* 顯示產品概要 */}
