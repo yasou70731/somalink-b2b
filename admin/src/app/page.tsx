@@ -13,7 +13,6 @@ import OrderDetailModal from '@/components/OrderDetailModal';
 
 export default function AdminDashboard() {
   const router = useRouter();
-  // ✨ Fix: 初始值給空陣列
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -24,15 +23,16 @@ export default function AdminDashboard() {
   const [statusFilter, setStatusFilter] = useState('all');
 
   useEffect(() => {
-    // ✨ Fix: 檢查正確的 token key
     const token = localStorage.getItem('somalink_admin_token');
     if (!token) { router.push('/login'); }
   }, [router]);
 
   const fetchOrders = useCallback(async () => {
     try {
-      const res = await api.get('/orders/all');
-      // ✨ Fix: 雙重保險，如果回傳的不是陣列，強制設為空陣列，避免頁面崩潰
+      // ✨ 修正重點：拿掉 "/all"，改成 "/orders"
+      // 這樣才會對應到後端的 @Get() findAll，而不是 @Get(':id') findOne
+      const res = await api.get('/orders');
+      
       if (Array.isArray(res)) {
         setOrders(res);
       } else {
@@ -41,14 +41,13 @@ export default function AdminDashboard() {
       }
     } catch (err) {
       console.error('無法取得訂單列表', err);
-      setOrders([]); // 失敗時清空
+      setOrders([]); 
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    // ✨ Fix: 檢查正確的 token key
     if (typeof window !== 'undefined' && localStorage.getItem('somalink_admin_token')) {
       fetchOrders();
     }
@@ -56,7 +55,6 @@ export default function AdminDashboard() {
 
   // 過濾邏輯
   const filteredOrders = useMemo(() => {
-    // ✨ Fix: (orders || []) 確保即使 orders 是 undefined 也不會當機
     return (orders || []).filter(order => {
       if (!order) return false;
       
