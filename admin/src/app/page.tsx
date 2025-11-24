@@ -13,7 +13,8 @@ import OrderDetailModal from '@/components/OrderDetailModal';
 
 export default function AdminDashboard() {
   const router = useRouter();
-  // ✨ Fix: 預設值給空陣列 []
+  
+  // ✨ Fix 1: 確保初始值為空陣列，避免 undefined
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -33,22 +34,23 @@ export default function AdminDashboard() {
       setLoading(true);
       const res = await api.get('/orders');
       
-      // ✨ Fix: 嚴格檢查回傳值是否為陣列
+      // ✨ Fix 2: 嚴格檢查 res 是否為陣列 (因為 api.ts 已經解構過 response.data)
       if (Array.isArray(res)) {
         setOrders(res);
       } else {
-        console.warn('API 回傳格式異常 (非陣列):', res);
-        setOrders([]); 
+        console.warn('API 回傳格式異常 (預期為陣列):', res);
+        setOrders([]); // 格式不對時，強制設為空陣列
       }
     } catch (err) {
-      console.error('無法取得訂單列表', err);
-      setOrders([]); // 錯誤時確保是空陣列
+      console.error('無法取得訂單列表:', err);
+      setOrders([]); // 發生錯誤時，強制設為空陣列
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    // 只有在瀏覽器端且有 Token 時才撈資料
     if (typeof window !== 'undefined' && localStorage.getItem('somalink_admin_token')) {
       fetchOrders();
     }
@@ -56,7 +58,7 @@ export default function AdminDashboard() {
 
   // 過濾邏輯
   const filteredOrders = useMemo(() => {
-    // ✨ Fix: 加入 (orders || []) 保護
+    // ✨ Fix 3: 加入 (orders || []) 保護，防止 orders 為 undefined 時 filter 報錯
     return (orders || []).filter(order => {
       if (!order) return false;
       

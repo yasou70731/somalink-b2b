@@ -19,9 +19,16 @@ export default function UsersPage() {
   const fetchUsers = async () => {
     try {
       const res = await api.get('/users');
-      setUsers(res.data);
+      // ✨ Fix: 直接使用 res，並確保它是陣列
+      if (Array.isArray(res)) {
+        setUsers(res);
+      } else {
+        console.warn('API 回傳格式異常 (非陣列):', res);
+        setUsers([]);
+      }
     } catch (err) {
       console.error(err);
+      setUsers([]);
     } finally {
       setLoading(false);
     }
@@ -60,7 +67,8 @@ export default function UsersPage() {
   };
 
   const filteredUsers = useMemo(() => {
-    return users.filter(user => {
+    return (users || []).filter(user => {
+      if (!user) return false;
       const term = searchTerm.toLowerCase();
       const profile = user.dealerProfile;
       return (

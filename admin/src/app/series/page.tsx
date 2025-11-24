@@ -34,9 +34,16 @@ export default function SeriesPage() {
   const fetchSeries = async () => {
     try {
       const res = await api.get('/series');
-      setSeriesList(res.data);
+      // ✨ Fix: 直接使用 res，並確保它是陣列
+      if (Array.isArray(res)) {
+        setSeriesList(res);
+      } else {
+        console.warn('API 回傳格式異常 (非陣列):', res);
+        setSeriesList([]);
+      }
     } catch (err) {
       console.error(err);
+      setSeriesList([]);
     } finally {
       setLoading(false);
     }
@@ -189,7 +196,6 @@ export default function SeriesPage() {
                     <span className="text-xs text-gray-500 mt-1">點擊上傳圖片</span>
                     <input type="file" hidden accept="image/*" onChange={handleImageUpload} />
                   </label>
-                  {/* ✨ 修正處：將 flex-shrink-0 改為 shrink-0 */}
                   <div className="w-24 h-24 bg-gray-100 rounded-lg border overflow-hidden shrink-0">
                     {imageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
