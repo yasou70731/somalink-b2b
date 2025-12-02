@@ -1,11 +1,17 @@
 import axios from 'axios';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://somalink-backend.onrender.com';
+// ✨ 設定 1：強制指向本機後端，解決連線到雲端舊資料的問題
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
-// ... (介面定義保持不變) ...
+// --- TypeScript 介面定義區 ---
+
 export interface OrderItem {
   id: string;
-  product: { name: string; imageUrl?: string; };
+  product: { 
+    name: string; 
+    images?: string[]; 
+    imageUrl?: string; 
+  };
   serviceType: string;
   widthMatrix: { top: number; mid: number; bot: number };
   heightData: any;
@@ -35,6 +41,13 @@ export interface Order {
   totalAmount: number;
   createdAt: string;
   projectName: string;
+  shippingAddress?: string;
+  siteContactPerson?: string;
+  siteContactPhone?: string;
+  
+  // ✨ 補上附件欄位定義
+  attachments?: string[];
+
   user: {
     id: string;
     email: string;
@@ -51,6 +64,8 @@ export interface Order {
   customerNote?: string;
 }
 
+// --- Axios 實例設定 ---
+
 const axiosInstance = axios.create({
   baseURL: API_URL,
   headers: {
@@ -58,17 +73,21 @@ const axiosInstance = axios.create({
   },
 });
 
-// ✨ Fix: 這裡必須改成 'somalink_admin_token'，跟登入頁一致！
+// ✨ 設定 2：請求攔截器 (修正 Token 讀取位置)
 axiosInstance.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
-    // 🔴 請確認這裡已經改過來了！
+    // ⚠️ 關鍵修正：後台必須讀取 'somalink_admin_token'
+    // 如果讀成前台的 'somalink_token' 就會導致 401 錯誤
     const token = localStorage.getItem('somalink_admin_token');
+    
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
   }
   return config;
 });
+
+// --- API 方法導出 ---
 
 export const api = {
   get: async (url: string) => {
@@ -87,10 +106,14 @@ export const api = {
     const response = await axiosInstance.delete(url);
     return response.data;
   },
+  
+  // 圖片上傳 (Cloudinary)
   uploadImage: async (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('upload_preset', 'somalink_preset');
+    // 建議將此字串移至 .env，目前先保留寫死以利測試
+    formData.append('upload_preset', 'yasou70731'); 
+    
     const res = await axios.post(
       'https://api.cloudinary.com/v1_1/dnibj8za6/image/upload', 
       formData

@@ -1,15 +1,15 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { api } from '@/lib/api';
 
-// 定義購物車內的單項商品結構 (對應後端的 OrderItem)
+// 定義購物車項目的資料結構
 export interface CartItem {
-  internalId: string; // 前端專用的唯一 ID (用來刪除用)
+  internalId: string; // 前端識別ID (本地端為 UUID，伺服器端為資料庫 ID)
   productId: string;
-  productName: string; // 顯示用
-  unitPrice: number;   // 單價
+  productName: string; 
+  unitPrice: number;   
   
-  // --- 規格資料 ---
   serviceType: string;
   widthMatrix: { top: number; mid: number; bot: number };
   heightData: any;
@@ -17,13 +17,13 @@ export interface CartItem {
   siteConditions?: any;
   colorName: string;
   materialName: string;
+  handleName: string;
   openingDirection: string;
   hasThreshold: boolean;
   
-  // --- 數量與價格 ---
   quantity: number;
   subtotal: number;
-  priceSnapshot: any; // 完整的價格結構
+  priceSnapshot: any; 
 }
 
 interface CartContextType {
@@ -39,34 +39,139 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-  // (選配) 初始化時從 localStorage 讀取，避免重整後消失
+  // 1. 初始化：檢查登入狀態並載入對應的購物車
   useEffect(() => {
-    const saved = localStorage.getItem('soma_cart');
-    if (saved) {
-      try {
-        setItems(JSON.parse(saved));
-      } catch (e) {
-        console.error('Failed to parse cart', e);
+    const checkAuth = () => {
+      // 同時檢查 LocalStorage 與 SessionStorage
+      const token = localStorage.getItem('somalink_token') || sessionStorage.getItem('somalink_token');
+      const hasAuth = !!token;
+      setIsLoggedIn(hasAuth);
+      return hasAuth;
+    };
+
+    const authenticated = checkAuth();
+
+    if (authenticated) {
+      // A. 已登入：從伺服器抓取
+      fetchServerCart();
+    } else {
+      // B. 未登入：從 LocalStorage 抓取
+      const saved = localStorage.getItem('soma_cart');
+      if (saved) {
+        try {
+          setItems(JSON.parse(saved));
+        } catch (e) {
+          console.error('Failed to parse local cart', e);
+        }
       }
     }
   }, []);
 
-  // 每次變動都存回 localStorage
+  // 僅在未登入時，將 items 變化同步回 LocalStorage
   useEffect(() => {
-    localStorage.setItem('soma_cart', JSON.stringify(items));
-  }, [items]);
+    if (!isLoggedIn) {
+      localStorage.setItem('soma_cart', JSON.stringify(items));
+    }
+  }, [items, isLoggedIn]);
 
-  const addToCart = (newItem: CartItem) => {
-    setItems((prev) => [...prev, newItem]);
+  // --- 核心功能：從後端同步購物車 ---
+  const fetchServerCart = async () => {
+    try {
+      const serverItems = await api.cart.list();
+      // 將後端資料格式轉換為前端 CartItem 格式
+      const formattedItems: CartItem[] = serverItems.map((item: any) => ({
+        internalId: item.id, // 使用後端資料庫 ID
+        productId: item.product?.id,
+        productName: item.product?.name || '未知商品',
+        // 若後端沒存單價，可用總價反推或依賴快照
+        unitPrice: Number(item.subtotal) / item.quantity, 
+        quantity: item.quantity,
+        subtotal: Number(item.subtotal),
+        
+        serviceType: item.serviceType,
+        widthMatrix: item.widthMatrix,
+        heightData: item.heightData,
+        isCeilingMounted: item.isCeilingMounted,
+        siteConditions: item.siteConditions,
+        colorName: item.colorName,
+        materialName: item.materialName,
+        handleName: item.handleName,
+        openingDirection: item.openingDirection,
+        hasThreshold: item.hasThreshold,
+        priceSnapshot: item.priceSnapshot
+      }));
+      setItems(formattedItems);
+    } catch (error) {
+      console.error('無法同步伺服器購物車', error);
+    }
   };
 
-  const removeFromCart = (internalId: string) => {
-    setItems((prev) => prev.filter((item) => item.internalId !== internalId));
+  // --- 動作：加入購物車 ---
+  const addToCart = async (newItem: CartItem) => {
+    if (isLoggedIn) {
+      // 已登入：呼叫 API
+      try {
+        await api.cart.add({
+          // 傳送符合後端 DTO 的資料
+          productId: newItem.productId,
+          quantity: newItem.quantity,
+          subtotal: newItem.subtotal,
+          serviceType: newItem.serviceType,
+          widthMatrix: newItem.widthMatrix,
+          heightData: newItem.heightData,
+          isCeilingMounted: newItem.isCeilingMounted,
+          siteConditions: newItem.siteConditions,
+          colorName: newItem.colorName,
+          materialName: newItem.materialName,
+          handleName: newItem.handleName,
+          openingDirection: newItem.openingDirection,
+          hasThreshold: newItem.hasThreshold,
+          priceSnapshot: newItem.priceSnapshot
+        });
+        // 加入後重新抓取，確保資料一致
+        await fetchServerCart();
+      } catch (err) {
+        console.error(err);
+        alert('加入購物車失敗 (伺服器錯誤)，請稍後再試');
+      }
+    } else {
+      // 未登入：操作本地狀態
+      setItems((prev) => [...prev, newItem]);
+    }
   };
 
-  const clearCart = () => {
-    setItems([]);
+  // --- 動作：移除項目 ---
+  const removeFromCart = async (internalId: string) => {
+    if (isLoggedIn) {
+      try {
+        await api.cart.remove(internalId);
+        // 樂觀更新 (先從 UI 移除)
+        setItems((prev) => prev.filter((item) => item.internalId !== internalId));
+      } catch (err) {
+        console.error(err);
+        alert('移除失敗');
+        fetchServerCart(); // 失敗時回復狀態
+      }
+    } else {
+      setItems((prev) => prev.filter((item) => item.internalId !== internalId));
+    }
+  };
+
+  // --- 動作：清空購物車 ---
+  const clearCart = async () => {
+    if (isLoggedIn) {
+      try {
+        await api.cart.clear();
+        setItems([]);
+      } catch (err) { 
+        console.error(err);
+      }
+    } else {
+      setItems([]);
+      localStorage.removeItem('soma_cart');
+    }
   };
 
   const cartTotal = items.reduce((sum, item) => sum + item.subtotal, 0);

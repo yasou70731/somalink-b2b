@@ -1,17 +1,18 @@
-import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, OneToOne } from 'typeorm';
+import { User } from './user.entity';
 
-// 1. 將 DealerLevel 改為 Enum 並導出，這樣才能作為值使用 (修復 TS2693)
 export enum DealerLevel {
   A = 'A',
   B = 'B',
   C = 'C',
 }
 
-// 2. 定義並導出 TradeType Enum (修復 TS2305)
 export enum TradeType {
-  GLASS_SHOP = 'glass_shop',
-  INTERIOR_DESIGN = 'interior_design',
-  OTHER = 'other',
+  DESIGN = 'design', 
+  GLASS = 'glass',   
+  WINDOW = 'window', 
+  DECOR = 'decor',   
+  OTHER = 'other',   
 }
 
 @Entity()
@@ -22,8 +23,8 @@ export class DealerProfile {
   @Column()
   companyName: string;
 
-  @Column({ nullable: true })
-  taxId: string; // 統編
+  @Column()
+  taxId: string;
 
   @Column()
   contactPerson: string;
@@ -34,6 +35,15 @@ export class DealerProfile {
   @Column()
   address: string;
 
+  // ✨✨✨ 修正：加入 nullable: true 解決資料庫衝突 ✨✨✨
+  @Column({
+    type: 'enum',
+    enum: TradeType,
+    default: TradeType.OTHER,
+    nullable: true 
+  })
+  tradeType: TradeType;
+
   @Column({
     type: 'enum',
     enum: DealerLevel,
@@ -41,22 +51,15 @@ export class DealerProfile {
   })
   level: DealerLevel;
 
-  // 用來記錄是否通過書面審核 (可選)
   @Column({ default: false })
   isVerified: boolean;
 
-  // ✨ 3. 新增缺失的欄位以修復 TS2339 錯誤：
-
-  @Column({
-    type: 'enum',
-    enum: TradeType,
-    nullable: true, // 設為 nullable 以避免舊資料出錯
-  })
-  tradeType: TradeType;
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
+  walletBalance: number;
 
   @Column({ default: false })
   isUpgradeable: boolean;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
-  walletBalance: number;
+  @OneToOne(() => User, (user) => user.dealerProfile)
+  user: User;
 }

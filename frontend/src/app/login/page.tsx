@@ -11,6 +11,9 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   
+  // ✨ 新增：記住我狀態
+  const [rememberMe, setRememberMe] = useState(false);
+  
   const [formData, setFormData] = useState({ email: '', password: '' });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -19,10 +22,26 @@ export default function LoginPage() {
     setErrorMsg(null);
 
     try {
-      const response = await api.post('/auth/login', formData);
-      const { access_token, user } = response.data;
-      localStorage.setItem('somalink_token', access_token);
-      localStorage.setItem('somalink_user', JSON.stringify(user));
+      const data = await api.post('/auth/login', formData);
+      const { access_token, user } = data;
+
+      // ✨ 根據「記住我」選擇儲存位置
+      if (rememberMe) {
+        // 存入 LocalStorage (永久)
+        localStorage.setItem('somalink_token', access_token);
+        localStorage.setItem('somalink_user', JSON.stringify(user));
+        // 清除 Session 以防萬一
+        sessionStorage.removeItem('somalink_token');
+        sessionStorage.removeItem('somalink_user');
+      } else {
+        // 存入 SessionStorage (關閉分頁即失效)
+        sessionStorage.setItem('somalink_token', access_token);
+        sessionStorage.setItem('somalink_user', JSON.stringify(user));
+        // 清除 Local
+        localStorage.removeItem('somalink_token');
+        localStorage.removeItem('somalink_user');
+      }
+
       router.push('/');
     } catch (err: any) {
       console.error('登入失敗:', err);
@@ -47,7 +66,6 @@ export default function LoginPage() {
           <h2 className="text-3xl font-bold tracking-tight text-gray-900">
             經銷商登入
           </h2>
-          {/* ✨ 修改這裡：改成 松成有限公司 */}
           <p className="mt-2 text-sm text-gray-600">
             歡迎回到 松成有限公司 數位工廠
           </p>
@@ -75,6 +93,29 @@ export default function LoginPage() {
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Lock className="h-5 w-5 text-gray-400" /></div>
                 <input type="password" required className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all" placeholder="••••••••" value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} />
               </div>
+            </div>
+          </div>
+
+          {/* ✨ 新增：記住我 & 忘記密碼 */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <input
+                id="remember-me"
+                name="remember-me"
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+              />
+              <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900 cursor-pointer select-none">
+                記住我
+              </label>
+            </div>
+
+            <div className="text-sm">
+              <Link href="/forgot-password" className="font-medium text-blue-600 hover:text-blue-500">
+                忘記密碼？
+              </Link>
             </div>
           </div>
 

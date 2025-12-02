@@ -1,5 +1,5 @@
-import { Entity, Column, PrimaryGeneratedColumn, ManyToOne } from 'typeorm';
-import { Order } from './order.entity';
+import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { User } from '../../users/entities/user.entity';
 import { Product } from '../../products/entities/product.entity';
 
 export enum ServiceType {
@@ -8,14 +8,14 @@ export enum ServiceType {
 }
 
 @Entity()
-export class OrderItem {
+export class CartItem {
   @PrimaryGeneratedColumn('uuid')
   id: string;
-  
-  // 關聯回訂單主檔 (多對一)
-  // onDelete: 'CASCADE' 表示如果訂單被刪除，底下的項目也會一起刪除
-  @ManyToOne(() => Order, (order) => order.items, { onDelete: 'CASCADE' }) 
-  order: Order;
+
+  // 關聯到使用者 (這是關鍵，讓購物車跟著人走)
+  // onDelete: 'CASCADE' 表示如果使用者被刪除，購物車也會一起刪除
+  @ManyToOne(() => User, (user) => user.cartItems, { onDelete: 'CASCADE' })
+  user: User;
 
   @ManyToOne(() => Product, { eager: true })
   product: Product;
@@ -45,7 +45,7 @@ export class OrderItem {
   @Column()
   materialName: string;
 
-  // ✨✨✨ 新增：把手名稱 (與購物車一致) ✨✨✨
+  // 把手名稱 (新增欄位)
   @Column({ nullable: true })
   handleName: string;
 
@@ -58,10 +58,11 @@ export class OrderItem {
   @Column({ type: 'int', default: 1 })
   quantity: number;
 
+  // 這裡儲存的是「加入購物車當下」的試算金額
   @Column({ type: 'decimal', precision: 12, scale: 2 })
   subtotal: number; 
 
-  // ✨✨✨ 詳細價格快照 (確保與購物車結構一致) ✨✨✨
+  // 詳細價格快照 (方便後續轉成訂單時直接使用)
   @Column({ type: 'jsonb' })
   priceSnapshot: {
     basePrice: number;
@@ -72,4 +73,10 @@ export class OrderItem {
     assemblyFee: number;
     thresholdFee: number;
   };
+
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
 }

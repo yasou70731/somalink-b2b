@@ -3,18 +3,21 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { OrdersService } from './orders.service';
 import { OrdersController } from './orders.controller';
 import { Order } from './entities/order.entity';
-import { OrderItem } from './entities/order-item.entity'; // ✨ 1. 引入 OrderItem
+import { OrderItem } from './entities/order-item.entity';
 import { User } from '../users/entities/user.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
+// ✨✨✨ 引入 SiteConfigModule ✨✨✨
+import { SiteConfigModule } from '../site-config/site-config.module';
 
 @Module({
   imports: [
-    // ✨ 2. 加入 OrderItem 到這裡
     TypeOrmModule.forFeature([Order, OrderItem, User]), 
-    NotificationsModule
+    NotificationsModule,
+    // ✨✨✨ 註冊 ✨✨✨
+    SiteConfigModule
   ],
   controllers: [OrdersController],
   providers: [OrdersService],
-  exports: [OrdersService], // 如果其他模組需要用
+  exports: [OrdersService], 
 })
 export class OrdersModule {}

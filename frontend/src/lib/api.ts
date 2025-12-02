@@ -8,15 +8,17 @@ export interface OrderItem {
   id: string;
   product: { 
     name: string;
-    imageUrl?: string; // 預留圖片欄位
+    images?: string[];
+    imageUrl?: string; 
   };
-  serviceType: 'material' | 'assembled'; // ✨ 服務模式：純材料 vs 連工帶料
+  serviceType: 'material' | 'assembled';
   widthMatrix: { top: number; mid: number; bot: number };
-  heightData: any; // 可以進一步定義細節
+  heightData: any;
   isCeilingMounted: boolean;
   siteConditions?: any;
   colorName: string;
   materialName: string;
+  handleName?: string;
   openingDirection: string;
   hasThreshold: boolean;
   quantity: number;
@@ -24,33 +26,30 @@ export interface OrderItem {
   priceSnapshot: any;
 }
 
-// 定義訂單狀態 Enum
 export enum OrderStatus {
-  PENDING = 'pending',       // 待審核
-  PROCESSING = 'processing', // 生產中
-  SHIPPED = 'shipped',       // 已出貨 (新增)
-  COMPLETED = 'completed',   // 已完成
-  CANCELLED = 'cancelled',   // 已取消
+  PENDING = 'pending',       
+  PROCESSING = 'processing', 
+  SHIPPED = 'shipped',       
+  COMPLETED = 'completed',   
+  CANCELLED = 'cancelled',   
 }
 
-// 定義完整訂單介面
 export interface Order {
   id: string;
   orderNumber: string;
-  status: OrderStatus; // 使用 Enum
+  status: OrderStatus;
   totalAmount: number;
   createdAt: string;
   projectName: string;
-  
-  // ✨ 新增：客戶備註與管理員備註
+  shippingAddress?: string;
+  siteContactPerson?: string;
+  siteContactPhone?: string;
+  attachments?: string[];
   customerNote?: string;
   adminNote?: string;
-
-  // 關聯資訊
-  items: OrderItem[]; // ✨ 這裡改成陣列
+  items: OrderItem[]; 
 }
 
-// 建立 Axios 實例
 const axiosInstance = axios.create({
   baseURL: API_URL,
   headers: {
@@ -58,11 +57,9 @@ const axiosInstance = axios.create({
   },
 });
 
-// 請求攔截器：自動帶入 Token
 axiosInstance.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
-    // 前台通常存成 'token'
-    const token = localStorage.getItem('token'); 
+    const token = localStorage.getItem('somalink_token') || sessionStorage.getItem('somalink_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -70,7 +67,6 @@ axiosInstance.interceptors.request.use((config) => {
   return config;
 });
 
-// 封裝 API 方法，自動回傳 response.data，簡化調用
 export const api = {
   get: async (url: string) => {
     const response = await axiosInstance.get(url);
@@ -88,4 +84,27 @@ export const api = {
     const response = await axiosInstance.delete(url);
     return response.data;
   },
+  // ✨✨✨ 新增：購物車專用 API ✨✨✨
+  cart: {
+    // 取得購物車
+    list: async () => {
+      const response = await axiosInstance.get('/cart');
+      return response.data;
+    },
+    // 加入購物車
+    add: async (item: any) => {
+      const response = await axiosInstance.post('/cart', item);
+      return response.data;
+    },
+    // 移除單項
+    remove: async (id: string) => {
+      const response = await axiosInstance.delete(`/cart/${id}`);
+      return response.data;
+    },
+    // 清空購物車
+    clear: async () => {
+      const response = await axiosInstance.delete('/cart');
+      return response.data;
+    }
+  }
 };

@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState, use } from 'react';
-import { api } from '@/lib/api'; // 如果後台可以用 @，就維持這樣；如果報錯，請改用相對路徑
-import { Loader2, Printer, MapPin, Phone, User, AlertTriangle, Ruler } from 'lucide-react';
+import { api } from '@/lib/api';
+import { Loader2, Printer, MapPin, Phone, User, MessageSquare } from 'lucide-react';
 
 export default function PrintDeliveryNotePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -10,7 +10,7 @@ export default function PrintDeliveryNotePage({ params }: { params: Promise<{ id
   const [showPrice, setShowPrice] = useState(true); 
 
   useEffect(() => {
-    api.get(`/orders/${id}`).then(res => setOrder(res.data)).catch(console.error);
+    api.get(`/orders/${id}`).then(res => setOrder(res)).catch(console.error);
   }, [id]);
 
   if (!order) return <div className="flex justify-center p-12"><Loader2 className="animate-spin w-8 h-8 text-blue-600" /></div>;
@@ -18,7 +18,7 @@ export default function PrintDeliveryNotePage({ params }: { params: Promise<{ id
   return (
     <div className="min-h-screen bg-gray-100 p-8 print:p-0 print:bg-white">
       
-      {/* 控制列 */}
+      {/* 控制列 (列印時隱藏) */}
       <div className="max-w-[210mm] mx-auto mb-6 flex justify-between items-center print:hidden bg-white p-4 rounded-lg shadow-sm border border-gray-200">
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -40,159 +40,152 @@ export default function PrintDeliveryNotePage({ params }: { params: Promise<{ id
         </button>
       </div>
 
-      {/* A4 紙張區域 */}
-      <div className="max-w-[210mm] mx-auto bg-white shadow-xl print:shadow-none p-[15mm] min-h-[297mm] text-black font-sans relative flex flex-col">
+      {/* A4 紙張區域 - 優化間距 (p-8 -> p-6) */}
+      <div className="max-w-[210mm] mx-auto bg-white shadow-xl print:shadow-none p-8 print:p-6 min-h-[297mm] text-black font-sans relative flex flex-col box-border">
         
-        {/* Header */}
-        <div className="flex justify-between items-start border-b-2 border-black pb-6 mb-6">
+        {/* Header - 縮減下方間距 (pb-6 -> pb-4, mb-6 -> mb-4) */}
+        <div className="flex justify-between items-start border-b-4 border-black pb-4 mb-4">
           <div className="flex items-center gap-4">
-            <div className="w-16 h-16 bg-black text-white flex items-center justify-center text-2xl font-bold rounded-lg">S</div>
+            <div className="w-14 h-14 bg-black text-white flex items-center justify-center text-2xl font-bold rounded-lg print:border print:border-black">S</div>
             <div>
-              <h1 className="text-3xl font-extrabold tracking-wider text-black">出貨單</h1>
-              <p className="text-sm font-bold mt-1">松成有限公司</p>
-              <p className="text-xs text-gray-600">統編：12345678</p>
-              <p className="text-xs text-gray-600">電話：(02) 2345-6789</p>
+              <h1 className="text-2xl font-extrabold tracking-wider text-black">出貨單</h1>
+              <p className="text-sm font-bold mt-1 text-black">松成有限公司</p>
+              <div className="flex gap-4 text-xs text-black font-medium mt-0.5">
+                <span>統編：12345678</span>
+                <span>電話：(02) 2345-6789</span>
+              </div>
             </div>
           </div>
           <div className="text-right">
-            <div className="inline-block border-2 border-black px-4 py-2 rounded mb-2">
-              <p className="text-xs font-bold uppercase tracking-wide text-gray-500">出貨單號 NO.</p>
-              <p className="text-xl font-mono font-bold">{order.orderNumber}</p>
+            <div className="inline-block border-2 border-black px-3 py-1 rounded mb-1">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-black">出貨單號 NO.</p>
+              <p className="text-lg font-mono font-bold text-black leading-none">{order.orderNumber}</p>
             </div>
-            <p className="text-sm mt-1 text-gray-600">列印日期：{new Date().toLocaleDateString()}</p>
+            <p className="text-xs mt-1 text-black font-medium">列印日期：{new Date().toLocaleDateString()}</p>
           </div>
         </div>
 
-        {/* 客戶與送貨資訊 */}
-        <div className="grid grid-cols-2 gap-8 mb-6">
-          <div className="border border-gray-300 rounded p-4">
-            <h3 className="text-sm font-bold bg-gray-100 px-2 py-1 mb-2 inline-block rounded text-gray-700">訂購經銷商 (Bill To)</h3>
-            <div className="space-y-1 text-sm">
-              <p><span className="text-gray-500 w-16 inline-block">公司名稱：</span><span className="font-bold">{order.user?.dealerProfile?.companyName}</span></p>
-              <p><span className="text-gray-500 w-16 inline-block">聯絡人：</span>{order.user?.dealerProfile?.contactPerson}</p>
-              <p><span className="text-gray-500 w-16 inline-block">電話：</span>{order.user?.dealerProfile?.phone}</p>
-            </div>
-          </div>
-          <div className="border border-gray-300 rounded p-4">
-            <h3 className="text-sm font-bold bg-gray-100 px-2 py-1 mb-2 inline-block rounded text-gray-700">送貨資訊 (Ship To)</h3>
-            <div className="space-y-1 text-sm">
-              <p className="flex items-start"><MapPin className="w-4 h-4 mr-1 mt-0.5 text-gray-400" /><span className="font-bold text-lg">{order.projectName || '未填寫案場名'}</span></p>
-              <p className="flex items-center mt-1"><User className="w-4 h-4 mr-1 text-gray-400" /> {order.siteContactPerson || order.user?.dealerProfile?.contactPerson || '同訂購人'}</p>
-              <p className="flex items-center"><Phone className="w-4 h-4 mr-1 text-gray-400" /> {order.siteContactPhone || order.user?.dealerProfile?.phone}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* 產品明細 */}
-        <table className="w-full mb-6 border-collapse">
-          <thead>
-            <tr className="bg-gray-100 border-y-2 border-black text-sm">
-              <th className="py-2 px-4 text-left w-12">#</th>
-              <th className="py-2 px-4 text-left">產品名稱 / 詳細規格</th>
-              <th className="py-2 px-4 text-center w-24">數量</th>
-              {showPrice && <th className="py-2 px-4 text-right w-32">單價</th>}
-              {showPrice && <th className="py-2 px-4 text-right w-32">金額</th>}
-            </tr>
-          </thead>
-          <tbody className="text-sm">
-            <tr className="border-b border-gray-200">
-              <td className="py-4 px-4 align-top">1</td>
-              <td className="py-4 px-4 align-top">
-                <p className="font-bold text-base">{order.product?.name}</p>
-                <div className="text-gray-600 text-xs mt-2 grid grid-cols-2 gap-x-4 gap-y-1 font-mono">
-                  <p>型號: {order.product?.sku}</p>
-                  <p>顏色: {order.colorName}</p>
-                  <p>材質: {order.materialName}</p>
-                  <p>開向: {order.openingDirection}</p>
-                  <p>模式: {order.serviceType === 'assembled' ? '成品含代工' : '純材料'}</p>
-                </div>
-              </td>
-              <td className="py-4 px-4 text-center align-top font-bold">1 套</td>
-              {showPrice && <td className="py-4 px-4 text-right align-top font-mono">${Number(order.totalAmount).toLocaleString()}</td>}
-              {showPrice && <td className="py-4 px-4 text-right align-top font-bold font-mono">${Number(order.totalAmount).toLocaleString()}</td>}
-            </tr>
-          </tbody>
-        </table>
-
-        {/* 丈量數據 */}
-        <div className="mb-8 border-2 border-gray-800 rounded-lg overflow-hidden">
-          <div className="bg-gray-800 text-white px-4 py-2 flex items-center justify-between">
-            <h3 className="font-bold text-sm flex items-center gap-2">
-              <Ruler className="w-4 h-4" /> 原始丈量數據確認 (Verification Data)
-            </h3>
-            <span className="text-xs opacity-80">單位：mm</span>
-          </div>
+        {/* 客戶與送貨資訊 - 縮減間距 (gap-8 -> gap-4) */}
+        <div className="grid grid-cols-2 gap-4 mb-4 break-inside-avoid">
           
-          <div className="p-4 grid grid-cols-2 gap-8">
-            <div>
-              <p className="text-xs font-bold text-gray-500 text-center mb-2 uppercase">寬度矩陣 (Width)</p>
-              <div className="grid grid-cols-3 border border-gray-300 text-center text-sm">
-                <div className="bg-gray-100 p-1 border-r border-b border-gray-300 text-xs">上</div>
-                <div className="bg-gray-100 p-1 border-r border-b border-gray-300 text-xs">中</div>
-                <div className="bg-gray-100 p-1 border-b border-gray-300 text-xs">下</div>
-                <div className="p-2 border-r border-gray-300 font-mono font-bold">{order.widthMatrix?.top}</div>
-                <div className="p-2 border-r border-gray-300 font-mono font-bold">{order.widthMatrix?.mid}</div>
-                <div className="p-2 font-mono font-bold">{order.widthMatrix?.bot}</div>
-              </div>
-            </div>
-            <div>
-              <p className="text-xs font-bold text-gray-500 text-center mb-2 uppercase">高度矩陣 (Height)</p>
-              {order.heightData?.singleValue ? (
-                <div className="border border-gray-300 p-2 text-center bg-gray-50">
-                  <span className="text-xs text-gray-500">不封頂實高：</span>
-                  <span className="font-bold font-mono text-lg ml-2">{order.heightData.singleValue}</span>
-                </div>
-              ) : (
-                <div className="grid grid-cols-3 border border-gray-300 text-center text-sm">
-                  <div className="bg-gray-100 p-1 border-r border-b border-gray-300 text-xs">左</div>
-                  <div className="bg-gray-100 p-1 border-r border-b border-gray-300 text-xs">中</div>
-                  <div className="bg-gray-100 p-1 border-r border-b border-gray-300 text-xs">右</div>
-                  <div className="p-2 border-r border-gray-300 font-mono font-bold">{order.heightData?.left}</div>
-                  <div className="p-2 border-r border-gray-300 font-mono font-bold">{order.heightData?.mid}</div>
-                  <div className="p-2 font-mono font-bold">{order.heightData?.right}</div>
-                </div>
-              )}
+          {/* 左邊：訂購經銷商 */}
+          <div className="border-2 border-black rounded p-3">
+            <h3 className="text-xs font-bold bg-gray-200 px-2 py-0.5 mb-2 inline-block rounded text-black print:border print:border-black">訂購經銷商 (Bill To)</h3>
+            <div className="space-y-0.5 text-sm text-black">
+              <p><span className="font-bold w-16 inline-block">公司名稱：</span><span className="font-bold">{order.user?.dealerProfile?.companyName}</span></p>
+              <p><span className="font-bold w-16 inline-block">聯絡人：</span>{order.user?.dealerProfile?.contactPerson}</p>
+              <p><span className="font-bold w-16 inline-block">電話：</span>{order.user?.dealerProfile?.phone}</p>
             </div>
           </div>
 
-          {order.siteConditions?.floor && (
-            <div className="mx-4 mb-4 p-3 bg-amber-50 border border-amber-200 rounded flex items-start gap-3 text-sm">
-              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-bold text-amber-800">⚠️ 地面水平有高低差</p>
-                <p className="text-amber-700 text-xs mt-1 font-mono">
-                  左: {order.siteConditions.floor.left} / 中: {order.siteConditions.floor.mid} / 右: {order.siteConditions.floor.right}
+          {/* 右邊：施工/送貨地點 */}
+          <div className="border-2 border-black rounded p-3">
+            <h3 className="text-xs font-bold bg-gray-200 px-2 py-0.5 mb-2 inline-block rounded text-black print:border print:border-black">送貨資訊 (Ship To)</h3>
+            <div className="space-y-0.5 text-sm text-black">
+              <div className="mb-1">
+                <p className="text-[10px] font-bold text-black">案場名稱</p>
+                <p className="font-bold text-base leading-tight">{order.projectName}</p>
+              </div>
+              
+              <div className="flex items-start gap-1 mb-1">
+                <MapPin className="w-3.5 h-3.5 mt-0.5 text-black shrink-0" />
+                <span className="font-bold border-b border-black pb-0 text-sm leading-tight">
+                  {order.shippingAddress || '未指定地址 (同經銷商)'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-1 text-xs">
+                <p className="flex items-center font-medium">
+                  <User className="w-3 h-3 mr-1 text-black" /> 
+                  {order.siteContactPerson || order.user?.dealerProfile?.contactPerson}
+                </p>
+                <p className="flex items-center font-medium">
+                  <Phone className="w-3 h-3 mr-1 text-black" /> 
+                  {order.siteContactPhone || order.user?.dealerProfile?.phone}
                 </p>
               </div>
             </div>
-          )}
+          </div>
         </div>
 
-        {/* 總計 */}
-        {showPrice && (
-          <div className="flex justify-end mb-12 border-t-2 border-black pt-4">
-            <div className="text-right">
-              <p className="text-sm font-bold text-gray-600">總計金額 (含稅)</p>
-              <p className="text-3xl font-bold text-black">NT$ {Number(order.totalAmount).toLocaleString()}</p>
+        {/* 訂單備註 */}
+        {order.customerNote && (
+          <div className="mb-4 border-2 border-black bg-gray-50 p-2 rounded text-sm flex items-start gap-2 break-inside-avoid">
+            <MessageSquare className="w-4 h-4 text-black mt-0.5 shrink-0" />
+            <div className="text-black">
+              <span className="font-bold mr-2">訂單備註：</span>
+              <span className="font-medium">{order.customerNote}</span>
             </div>
           </div>
         )}
 
-        {/* 底部 */}
-        <div className="mt-auto">
-          <div className="grid grid-cols-3 gap-8">
-            <div className="text-center">
-              <p className="text-sm font-bold mb-8">倉管備貨</p>
-              <div className="border-b border-black w-2/3 mx-auto"></div>
+        {/* 產品明細 - 緊湊表格 */}
+        <div className="flex-1">
+          <table className="w-full mb-4 border-collapse">
+            <thead>
+              <tr className="bg-gray-200 border-y-2 border-black text-xs text-black">
+                <th className="py-1 px-2 text-left w-8 font-bold">#</th>
+                <th className="py-1 px-2 text-left font-bold">產品名稱 / 詳細規格</th>
+                <th className="py-1 px-2 text-center w-16 font-bold">數量</th>
+                {showPrice && <th className="py-1 px-2 text-right w-24 font-bold">單價</th>}
+                {showPrice && <th className="py-1 px-2 text-right w-24 font-bold">金額</th>}
+              </tr>
+            </thead>
+            <tbody className="text-sm text-black">
+              {order.items?.map((item: any, index: number) => (
+                <tr key={index} className="border-b border-black break-inside-avoid">
+                  <td className="py-2 px-2 align-top font-bold text-center">{index + 1}</td>
+                  <td className="py-2 px-2 align-top">
+                    <p className="font-bold text-sm">{item.product?.name}</p>
+                    <div className="text-black text-[10px] mt-1 grid grid-cols-2 gap-x-2 gap-y-0.5 font-mono font-medium">
+                      <p>型號: {item.product?.sku}</p>
+                      <p>顏色: {item.colorName}</p>
+                      <p>材質: {item.materialName}</p>
+                      <p>開向: {item.openingDirection}</p>
+                      <p>模式: {item.serviceType === 'assembled' ? '連工帶料' : '純材料'}</p>
+                    </div>
+                    {/* 尺寸顯示 */}
+                    <div className="mt-1 bg-white px-1.5 py-0.5 rounded inline-block text-[10px] font-mono border border-black font-bold">
+                      W: {item.widthMatrix?.mid} x H: {item.heightData?.singleValue || item.heightData?.mid}
+                      {item.isCeilingMounted && <span className="ml-1 text-black font-extrabold">(封頂)</span>}
+                    </div>
+                  </td>
+                  <td className="py-2 px-2 text-center align-top font-bold">{item.quantity}</td>
+                  {showPrice && <td className="py-2 px-2 text-right align-top font-mono font-medium">${Number(item.unitPrice || item.subtotal / item.quantity).toLocaleString()}</td>}
+                  {showPrice && <td className="py-2 px-2 text-right align-top font-bold font-mono">${Number(item.subtotal).toLocaleString()}</td>}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* 總計與簽名 - 確保不被硬推到下一頁 */}
+        <div className="break-inside-avoid">
+          {showPrice && (
+            <div className="flex justify-end mb-6 border-t-2 border-black pt-2">
+              <div className="text-right">
+                <p className="text-xs font-bold text-black">總計金額 (含稅)</p>
+                <p className="text-2xl font-extrabold text-black">NT$ {Number(order.totalAmount).toLocaleString()}</p>
+              </div>
             </div>
-            <div className="text-center">
-              <p className="text-sm font-bold mb-8">司機配送</p>
-              <div className="border-b border-black w-2/3 mx-auto"></div>
-            </div>
-            <div className="text-center">
-              <p className="text-sm font-bold mb-8">客戶簽收</p>
-              <div className="border-b border-black w-2/3 mx-auto"></div>
-              <p className="text-[10px] text-gray-400 mt-1">本人確認上述規格與丈量數據無誤</p>
+          )}
+
+          {/* 底部簽名欄 - 縮減間距 */}
+          <div className="mt-4 pt-4 border-t border-dashed border-gray-400">
+            <div className="grid grid-cols-3 gap-8">
+              <div className="text-center">
+                <p className="text-xs font-bold mb-6 text-black">倉管備貨</p>
+                <div className="border-b-2 border-black w-3/4 mx-auto"></div>
+              </div>
+              <div className="text-center">
+                <p className="text-xs font-bold mb-6 text-black">司機配送</p>
+                <div className="border-b-2 border-black w-3/4 mx-auto"></div>
+              </div>
+              <div className="text-center">
+                <p className="text-xs font-bold mb-6 text-black">客戶簽收</p>
+                <div className="border-b-2 border-black w-3/4 mx-auto"></div>
+                <p className="text-[9px] text-black font-bold mt-1">本人確認上述規格與數量無誤</p>
+              </div>
             </div>
           </div>
         </div>

@@ -3,11 +3,11 @@ import { User } from '../../users/entities/user.entity';
 import { OrderItem } from './order-item.entity';
 
 export enum OrderStatus {
-  PENDING = 'pending',       // 待審核
-  PROCESSING = 'processing', // 生產中
-  SHIPPED = 'shipped',       // 已出貨
-  COMPLETED = 'completed',   // 已完成
-  CANCELLED = 'cancelled',   // 已取消
+  PENDING = 'pending',       
+  PROCESSING = 'processing', 
+  SHIPPED = 'shipped',       
+  COMPLETED = 'completed',   
+  CANCELLED = 'cancelled',   
 }
 
 @Entity()
@@ -18,7 +18,9 @@ export class Order {
   @Column({ unique: true })
   orderNumber: string;
 
-  @ManyToOne(() => User, { eager: true })
+  // ✨✨✨ 修改重點：加入 onDelete: 'CASCADE' ✨✨✨
+  // 這行代碼的意思是：當關聯的 User 被刪除時，自動刪除這筆 Order
+  @ManyToOne(() => User, { eager: true, onDelete: 'CASCADE' })
   user: User;
 
   @OneToMany(() => OrderItem, (item) => item.order, { cascade: true, eager: true })
@@ -26,6 +28,18 @@ export class Order {
 
   @Column()
   projectName: string;
+
+  @Column({ nullable: true })
+  shippingAddress: string;
+
+  @Column({ nullable: true })
+  siteContactPerson: string; 
+
+  @Column({ nullable: true })
+  siteContactPhone: string; 
+
+  @Column({ type: 'jsonb', nullable: true })
+  attachments: string[];
 
   @Column({
     type: 'enum',
@@ -40,11 +54,9 @@ export class Order {
   @Column({ default: false })
   agreedToDisclaimer: boolean;
 
-  // ✨ 修改：加上 ? 讓 TypeScript 知道它是選填的 (string | undefined)
   @Column({ nullable: true })
   adminNote?: string;
 
-  // ✨ 修改：加上 ? 讓 TypeScript 知道它是選填的 (string | undefined)
   @Column({ nullable: true })
   customerNote?: string;
 

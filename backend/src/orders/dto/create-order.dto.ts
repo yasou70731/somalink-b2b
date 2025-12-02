@@ -1,4 +1,4 @@
-import { IsString, IsBoolean, IsArray, IsEnum, IsNumber, ValidateNested, IsOptional, IsObject } from 'class-validator';
+import { IsString, IsBoolean, IsArray, IsNumber, ValidateNested, IsOptional, IsObject } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateOrderItemDto {
@@ -27,6 +27,11 @@ export class CreateOrderItemDto {
   @IsString()
   materialName: string;
 
+  // ✨✨✨ 新增：把手名稱 (選填) ✨✨✨
+  @IsString()
+  @IsOptional()
+  handleName?: string;
+
   @IsString()
   openingDirection: string;
 
@@ -47,10 +52,28 @@ export class CreateOrderDto {
   @IsString()
   projectName: string;
 
+  // ✨✨✨ 收貨資訊欄位 ✨✨✨
+  @IsString()
+  @IsOptional()
+  shippingAddress?: string;
+
+  @IsString()
+  @IsOptional()
+  siteContactPerson?: string;
+
+  @IsString()
+  @IsOptional()
+  siteContactPhone?: string;
+
+  // ✨✨✨ 附件欄位 (字串陣列) ✨✨✨
+  @IsArray()
+  @IsOptional()
+  @IsString({ each: true })
+  attachments?: string[];
+
   @IsBoolean()
   agreedToDisclaimer: boolean;
 
-  // ✨ 新增：選填的客戶備註
   @IsOptional()
   @IsString()
   customerNote?: string;

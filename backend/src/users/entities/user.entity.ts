@@ -1,11 +1,12 @@
-import { Entity, Column, PrimaryGeneratedColumn, OneToOne, JoinColumn, ManyToOne, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, OneToOne, JoinColumn, ManyToOne, OneToMany, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { DealerProfile } from './dealer-profile.entity';
 import { TradeCategory } from './trade-category.entity';
+import { CartItem } from '../../cart/entities/cart-item.entity';
 
-// 定義 UserRole Enum
 export enum UserRole {
-  ADMIN = 'ADMIN',
-  DEALER = 'DEALER',
+  // ✨✨✨ 修正：改回小寫，以符合資料庫現有的 Enum 定義 ✨✨✨
+  ADMIN = 'admin',
+  DEALER = 'dealer',
 }
 
 @Entity()
@@ -16,12 +17,11 @@ export class User {
   @Column({ unique: true })
   email: string;
 
-  @Column()
-  password: string; // 加密後的密碼
-
-  // ✨ 修改：暫時允許 name 為空 (nullable: true)，解決部署時的舊資料衝突
   @Column({ nullable: true })
-  name: string; 
+  password?: string;
+
+  @Column({ nullable: true })
+  name: string;
 
   @Column({
     type: 'enum',
@@ -30,17 +30,18 @@ export class User {
   })
   role: UserRole;
 
-  @Column({ default: false })
-  isActive: boolean; // 是否已啟用 (需後台開通)
+  @Column({ default: true })
+  isActive: boolean;
 
-  // --- 關聯 ---
-
-  @OneToOne(() => DealerProfile, { cascade: true, eager: true })
+  @OneToOne(() => DealerProfile, (profile) => profile.user, { cascade: true, eager: true })
   @JoinColumn()
   dealerProfile: DealerProfile;
 
-  @ManyToOne(() => TradeCategory, { eager: true, nullable: true })
-  tradeCategory: TradeCategory | null;
+  @ManyToOne(() => TradeCategory, { nullable: true, eager: true })
+  tradeCategory: TradeCategory;
+
+  @OneToMany(() => CartItem, (cartItem) => cartItem.user)
+  cartItems: CartItem[];
 
   @CreateDateColumn()
   createdAt: Date;

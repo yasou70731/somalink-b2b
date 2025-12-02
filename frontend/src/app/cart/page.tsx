@@ -3,40 +3,121 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Trash2, ArrowRight, Loader2, ShoppingBag, AlertCircle, Hammer, Package, MessageSquare } from 'lucide-react';
+import { Trash2, ArrowRight, Loader2, ShoppingBag, AlertCircle, Hammer, Package, MessageSquare, MapPin, Building2, User, Phone, Copy, UploadCloud, FileText, X } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { api } from '@/lib/api';
+import Modal from '@/components/Modal'; // ✨ 引入通用彈窗
+
+const CLOUDINARY_CLOUD_NAME = 'dnibj8za6'; 
+const CLOUDINARY_PRESET = 'yasou70731';  
 
 export default function CartPage() {
   const router = useRouter();
   const { items, removeFromCart, clearCart, cartTotal } = useCart();
   
-  // 解決 Hydration Mismatch 問題
   const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  // ✨ Modal 狀態管理
+  const [modalConfig, setModalConfig] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'info' as 'success' | 'error' | 'info' | 'warning',
+    redirect: '' // 點擊確定後是否要跳轉
+  });
+
+  useEffect(() => {
+    setMounted(true);
+    const stored = localStorage.getItem('somalink_user') || sessionStorage.getItem('somalink_user');
+    if (stored) {
+      try { setCurrentUser(JSON.parse(stored)); } catch(e) {}
+    }
+  }, []);
 
   const [projectName, setProjectName] = useState('');
-  // ✨ 新增：訂單備註狀態
+  const [shippingAddress, setShippingAddress] = useState(''); 
+  const [siteContactPerson, setSiteContactPerson] = useState(''); 
+  const [siteContactPhone, setSiteContactPhone] = useState(''); 
   const [customerNote, setCustomerNote] = useState(''); 
+  
+  const [attachments, setAttachments] = useState<string[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+
   const [agreed, setAgreed] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // ✨ 顯示彈窗 Helper
+  const showAlert = (title: string, message: string, type: 'error' | 'success' | 'info' | 'warning' = 'error', redirect = '') => {
+    setModalConfig({ isOpen: true, title, message, type, redirect });
+  };
+
+  const fillMemberInfo = () => {
+    if (currentUser && currentUser.dealerProfile) {
+      const { address, contactPerson, phone } = currentUser.dealerProfile;
+      if (address) setShippingAddress(address);
+      if (contactPerson) setSiteContactPerson(contactPerson);
+      if (phone) setSiteContactPhone(phone);
+    } else {
+      showAlert('提示', '無法讀取會員資料，請確認您已登入。', 'info');
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsUploading(true);
+    const newAttachments = [...attachments];
+
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('upload_preset', CLOUDINARY_PRESET);
+
+        const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
+          method: 'POST',
+          body: formData,
+        });
+        
+        const data = await res.json();
+        if (data.secure_url) {
+          newAttachments.push(data.secure_url);
+        }
+      }
+      setAttachments(newAttachments);
+    } catch (err) {
+      console.error('上傳失敗', err);
+      showAlert('上傳失敗', '部分檔案上傳失敗，請檢查網路或檔案大小。', 'error');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = async () => {
-    if (!projectName.trim()) {
-      alert('請輸入案場名稱 (例如：台北帝寶 A 棟)');
-      return;
-    }
-    if (!agreed) {
-      alert('請勾選同意免責聲明');
-      return;
-    }
+    // ✨ 改用 showAlert 取代 alert
+    if (!projectName.trim()) { showAlert('欄位未填', '請輸入案場名稱', 'warning'); return; }
+    if (!shippingAddress.trim()) { showAlert('欄位未填', '請輸入施工/送貨地址', 'warning'); return; }
+    if (!siteContactPerson.trim()) { showAlert('欄位未填', '請輸入現場聯絡人', 'warning'); return; }
+    if (!siteContactPhone.trim()) { showAlert('欄位未填', '請輸入現場電話', 'warning'); return; }
+    if (!agreed) { showAlert('請同意條款', '請勾選「我已確認上述規格無誤，並同意服務條款」', 'warning'); return; }
 
     setIsSubmitting(true);
 
     try {
       const payload = {
-        projectName: projectName,
-        customerNote: customerNote, // ✨ 傳送備註給後端
+        projectName,
+        shippingAddress,
+        siteContactPerson,
+        siteContactPhone,
+        customerNote,
+        attachments,
         agreedToDisclaimer: agreed,
         items: items.map(item => ({
           productId: item.productId,
@@ -47,6 +128,8 @@ export default function CartPage() {
           siteConditions: item.siteConditions,
           colorName: item.colorName,
           materialName: item.materialName,
+          // ✨ 傳送把手資訊
+          handleName: item.handleName,
           openingDirection: item.openingDirection,
           hasThreshold: item.hasThreshold,
           quantity: item.quantity,
@@ -56,18 +139,17 @@ export default function CartPage() {
       };
 
       await api.post('/orders', payload);
-      
       clearCart();
-      alert('🚀 訂單已送出！');
-      router.push('/orders');
+      
+      // ✨ 成功後顯示彈窗並跳轉
+      showAlert('訂單已送出！', '您的訂單已成功建立，請至「歷史訂單」查看進度。', 'success', '/orders');
 
     } catch (error: any) {
       console.error(error);
       if (error.response?.status === 401) {
-        alert('請先登入會員');
-        router.push('/login');
+        showAlert('權限錯誤', '請先登入會員後再試。', 'error', '/login');
       } else {
-        alert('結帳失敗，請聯繫管理員。');
+        showAlert('結帳失敗', '系統發生錯誤，請聯繫管理員。', 'error');
       }
     } finally {
       setIsSubmitting(false);
@@ -93,6 +175,19 @@ export default function CartPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 py-12">
+      {/* ✨ 全域彈窗元件 */}
+      <Modal 
+        isOpen={modalConfig.isOpen}
+        title={modalConfig.title}
+        message={modalConfig.message}
+        type={modalConfig.type}
+        onClose={() => {
+          setModalConfig(prev => ({ ...prev, isOpen: false }));
+          if (modalConfig.redirect) router.push(modalConfig.redirect);
+        }}
+        confirmText="確定"
+      />
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-8">確認訂單內容</h1>
 
@@ -102,53 +197,35 @@ export default function CartPage() {
           <div className="lg:col-span-2 space-y-6">
             {items.map((item) => (
               <div key={item.internalId} className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm flex flex-col sm:flex-row gap-6 relative group">
-                
                 <button 
                   onClick={() => removeFromCart(item.internalId)}
                   className="absolute top-4 right-4 p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
                 >
                   <Trash2 className="w-5 h-5" />
                 </button>
-
                 <div className="w-24 h-24 bg-gray-100 rounded-xl shrink-0 overflow-hidden">
                    {/* eslint-disable-next-line @next/next/no-img-element */}
                    <img src="https://images.unsplash.com/photo-1600607686527-6fb886090705?auto=format&fit=crop&q=80&w=200" alt={item.productName} className="w-full h-full object-cover" />
                 </div>
-
                 <div className="flex-1">
                   <div className="flex flex-wrap items-center gap-2 mb-1">
                     <h3 className="text-lg font-bold text-gray-900">{item.productName}</h3>
-                    {/* 顯示服務模式標籤 */}
                     {item.serviceType === 'material' ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-gray-100 text-gray-700 border border-gray-200">
-                        <Package className="w-3 h-3" /> 純材料
-                      </span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-gray-100 text-gray-700 border border-gray-200"><Package className="w-3 h-3" /> 純材料</span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-blue-50 text-blue-700 border border-blue-100">
-                        <Hammer className="w-3 h-3" /> 連工帶料
-                      </span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-blue-50 text-blue-700 border border-blue-100"><Hammer className="w-3 h-3" /> 連工帶料</span>
                     )}
                   </div>
-
                   <div className="mt-2 space-y-1 text-sm text-gray-600">
-                    <p><span className="font-medium">規格：</span>{item.colorName} / {item.materialName} / {item.openingDirection}</p>
-                    <p>
-                      <span className="font-medium">尺寸：</span>
-                      W {item.widthMatrix.mid}cm x H {item.heightData.singleValue || item.heightData.mid || 'N/A'}cm
-                      {item.isCeilingMounted && <span className="ml-2 px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">封頂</span>}
-                    </p>
-                    {item.siteConditions?.floor && (
-                      <p className="text-orange-600 text-xs flex items-center gap-1">
-                        <AlertCircle className="w-3 h-3" /> 地面水平誤差: {item.siteConditions.floor.diff}cm
-                      </p>
-                    )}
+                    {/* ✨ 顯示把手名稱 */}
+                    <p><span className="font-medium">規格：</span>{item.colorName} / {item.materialName} / {item.handleName || '無把手'} / {item.openingDirection}</p>
+                    <p><span className="font-medium">尺寸：</span>W {item.widthMatrix.mid}cm x H {item.heightData.singleValue || item.heightData.mid || 'N/A'}cm {item.isCeilingMounted && <span className="ml-2 px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">封頂</span>}</p>
+                    {item.siteConditions?.floor && <p className="text-orange-600 text-xs flex items-center gap-1"><AlertCircle className="w-3 h-3" /> 地面水平誤差: {item.siteConditions.floor.diff}cm</p>}
                   </div>
                   <div className="mt-4 flex items-center justify-between">
                     <div className="flex items-baseline gap-2">
                       <span className="text-2xl font-bold text-blue-600">${item.subtotal.toLocaleString()}</span>
-                      <span className="text-xs text-gray-400">
-                        ({item.serviceType === 'material' ? '材料買斷價' : '含工資打包價'})
-                      </span>
+                      <span className="text-xs text-gray-400">({item.serviceType === 'material' ? '材料買斷價' : '含工資打包價'})</span>
                     </div>
                     <span className="text-sm text-gray-400">數量: {item.quantity}</span>
                   </div>
@@ -161,69 +238,78 @@ export default function CartPage() {
           <div className="lg:col-span-1">
             <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm sticky top-24">
               <h2 className="text-xl font-bold text-gray-900 mb-6">訂單摘要</h2>
-              
               <div className="space-y-4 mb-6">
-                <div className="flex justify-between text-gray-600">
-                  <span>商品總數</span>
-                  <span>{items.length} 件</span>
+                <div className="flex justify-between text-gray-600"><span>商品總數</span><span>{items.length} 件</span></div>
+                <div className="flex justify-between text-lg font-bold text-gray-900 pt-4 border-t border-gray-100"><span>總金額</span><span>${cartTotal.toLocaleString()}</span></div>
+              </div>
+
+              <div className="mb-6 flex justify-between items-center">
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">收貨與聯絡資訊</span>
+                <button onClick={fillMemberInfo} className="text-xs text-blue-600 hover:bg-blue-50 px-2 py-1 rounded flex items-center gap-1 transition-colors"><Copy className="w-3 h-3" /> 同會員資料</button>
+              </div>
+
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1"><Building2 className="w-3.5 h-3.5" /> 案場名稱 *</label>
+                  <input type="text" value={projectName} onChange={(e) => setProjectName(e.target.value)} placeholder="例：台北帝寶 A 棟" className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
                 </div>
-                <div className="flex justify-between text-lg font-bold text-gray-900 pt-4 border-t border-gray-100">
-                  <span>總金額</span>
-                  <span>${cartTotal.toLocaleString()}</span>
+                <div>
+                  <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1"><MapPin className="w-3.5 h-3.5" /> 施工/送貨地址 *</label>
+                  <input type="text" value={shippingAddress} onChange={(e) => setShippingAddress(e.target.value)} placeholder="完整地址" className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1"><User className="w-3.5 h-3.5" /> 現場聯絡人 *</label>
+                    <input type="text" value={siteContactPerson} onChange={(e) => setSiteContactPerson(e.target.value)} placeholder="王先生" className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
+                  </div>
+                  <div>
+                    <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1"><Phone className="w-3.5 h-3.5" /> 現場電話 *</label>
+                    <input type="tel" value={siteContactPhone} onChange={(e) => setSiteContactPhone(e.target.value)} placeholder="0912..." className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
+                  </div>
                 </div>
               </div>
 
-              {/* 案場名稱輸入 */}
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">案場名稱 / 備註 *</label>
-                <input 
-                  type="text" 
-                  value={projectName}
-                  onChange={(e) => setProjectName(e.target.value)}
-                  placeholder="例：台北帝寶 A 棟"
-                  className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                />
-              </div>
-
-              {/* ✨ 新增：訂單備註輸入框 (已修正 CSS 衝突) */}
               <div className="mb-6">
-                <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-2">
-                  <MessageSquare className="w-4 h-4" /> 訂單備註 (選填)
-                </label>
-                <textarea 
-                  value={customerNote}
-                  onChange={(e) => setCustomerNote(e.target.value)}
-                  placeholder="例如：請週六配送、需要事先聯絡..."
-                  className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all h-24 resize-none text-sm"
-                />
+                <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-2"><UploadCloud className="w-3.5 h-3.5" /> 附件上傳 (現場照/CAD圖) 選填</label>
+                
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {attachments.map((url, index) => (
+                    <div key={index} className="relative group">
+                      <div className="w-12 h-12 bg-gray-100 rounded-lg border border-gray-200 flex items-center justify-center overflow-hidden">
+                        {url.match(/\.(jpeg|jpg|gif|png)$/i) ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={url} alt="attachment" className="w-full h-full object-cover" />
+                        ) : (
+                          <FileText className="w-6 h-6 text-gray-400" />
+                        )}
+                      </div>
+                      <button onClick={() => removeAttachment(index)} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"><X className="w-3 h-3" /></button>
+                    </div>
+                  ))}
+                  
+                  <label className="w-12 h-12 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center cursor-pointer hover:bg-gray-50 hover:border-blue-400 transition-colors">
+                    {isUploading ? <Loader2 className="w-5 h-5 text-blue-500 animate-spin" /> : <UploadCloud className="w-5 h-5 text-gray-400" />}
+                    <input type="file" multiple onChange={handleFileUpload} className="hidden" disabled={isUploading} />
+                  </label>
+                </div>
+                <p className="text-xs text-gray-400">支援圖片與 PDF，單檔請勿超過 10MB。</p>
+              </div>
+
+              <div className="mb-6">
+                <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-2"><MessageSquare className="w-3.5 h-3.5" /> 訂單備註 (選填)</label>
+                <textarea value={customerNote} onChange={(e) => setCustomerNote(e.target.value)} placeholder="其他需求..." className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none h-20 resize-none text-sm" />
               </div>
 
               <label className="flex items-start gap-3 mb-6 cursor-pointer p-3 rounded-lg hover:bg-gray-50 transition-colors">
-                <input 
-                  type="checkbox" 
-                  checked={agreed}
-                  onChange={(e) => setAgreed(e.target.checked)}
-                  className="mt-1 w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500" 
-                />
-                <span className="text-sm text-gray-600 leading-relaxed">
-                  我已確認上述尺寸與規格無誤。我瞭解客製化商品一旦下單生產即無法退換貨，並同意 <span className="text-blue-600 underline">服務條款</span>。
-                </span>
+                <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-1 w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500" />
+                <span className="text-sm text-gray-600 leading-relaxed">我已確認上述規格無誤，並同意服務條款。</span>
               </label>
 
-              <button 
-                onClick={handleSubmit}
-                disabled={isSubmitting}
-                className="w-full py-4 bg-gray-900 hover:bg-black text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
-              >
-                {isSubmitting ? (
-                  <Loader2 className="animate-spin w-5 h-5" />
-                ) : (
-                  <>確認下單 <ArrowRight className="w-5 h-5" /></>
-                )}
+              <button onClick={handleSubmit} disabled={isSubmitting} className="w-full py-4 bg-gray-900 hover:bg-black text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 disabled:opacity-70">
+                {isSubmitting ? <Loader2 className="animate-spin w-5 h-5" /> : <>確認下單 <ArrowRight className="w-5 h-5" /></>}
               </button>
             </div>
           </div>
-
         </div>
       </div>
     </div>
