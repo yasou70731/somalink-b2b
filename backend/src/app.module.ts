@@ -11,10 +11,12 @@ import { ReportsModule } from './reports/reports.module';
 import { SeriesModule } from './series/series.module';
 import { AnnouncementsModule } from './announcements/announcements.module';
 import { NotificationsModule } from './notifications/notifications.module';
-// 引入網站設定模組 (首頁積木、系統規則)
+// 引入網站設定模組
 import { SiteConfigModule } from './site-config/site-config.module';
-// 引入購物車模組 (伺服器端購物車)
+// 引入購物車模組
 import { CartModule } from './cart/cart.module';
+// ✨✨✨ 引入 LogsModule ✨✨✨
+import { LogsModule } from './logs/logs.module';
 
 @Module({
   imports: [
@@ -50,6 +52,8 @@ import { CartModule } from './cart/cart.module';
     NotificationsModule,
     SiteConfigModule,
     CartModule,
+    // ✨✨✨ 註冊 LogsModule ✨✨✨
+    LogsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

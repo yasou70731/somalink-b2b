@@ -1,17 +1,40 @@
 'use client';
 
 import { useEffect, useState, use } from 'react';
+import { useRouter } from 'next/navigation'; 
 import { api } from '@/lib/api';
 import { Loader2, Printer, MapPin, Phone, User, MessageSquare } from 'lucide-react';
 
 export default function PrintDeliveryNotePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter(); 
   const [order, setOrder] = useState<any>(null);
   const [showPrice, setShowPrice] = useState(true); 
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    api.get(`/orders/${id}`).then(res => setOrder(res)).catch(console.error);
-  }, [id]);
+    if (typeof window !== 'undefined') {
+      const searchParams = new URLSearchParams(window.location.search);
+      const tokenFromUrl = searchParams.get('t');
+      if (tokenFromUrl) {
+        sessionStorage.setItem('somalink_token', tokenFromUrl);
+      }
+    }
+    setIsReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isReady) return;
+    api.get(`/orders/${id}`)
+      .then(res => setOrder(res))
+      .catch(err => {
+        console.error(err);
+        if (err.response?.status === 401) {
+          alert('您的登入憑證已過期或無效，請重新登入。');
+          router.push('/login'); 
+        }
+      });
+  }, [id, isReady, router]);
 
   if (!order) return <div className="flex justify-center p-12"><Loader2 className="animate-spin w-8 h-8 text-blue-600" /></div>;
 
@@ -40,10 +63,13 @@ export default function PrintDeliveryNotePage({ params }: { params: Promise<{ id
         </button>
       </div>
 
-      {/* A4 紙張區域 - 優化間距 (p-8 -> p-6) */}
-      <div className="max-w-[210mm] mx-auto bg-white shadow-xl print:shadow-none p-8 print:p-6 min-h-[297mm] text-black font-sans relative flex flex-col box-border">
+      {/* A4 紙張區域 
+          ✨ 修改 1: 移除 min-h-[297mm]，改用 min-h-screen 或 auto，並在 print 時設為 h-auto
+          ✨ 修改 2: 移除 flex flex-col，改用 block 讓內容自然流動
+      */}
+      <div className="max-w-[210mm] mx-auto bg-white shadow-xl print:shadow-none p-8 print:p-6 text-black font-sans relative box-border print:h-auto print:min-h-0">
         
-        {/* Header - 縮減下方間距 (pb-6 -> pb-4, mb-6 -> mb-4) */}
+        {/* Header */}
         <div className="flex justify-between items-start border-b-4 border-black pb-4 mb-4">
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 bg-black text-white flex items-center justify-center text-2xl font-bold rounded-lg print:border print:border-black">S</div>
@@ -65,10 +91,9 @@ export default function PrintDeliveryNotePage({ params }: { params: Promise<{ id
           </div>
         </div>
 
-        {/* 客戶與送貨資訊 - 縮減間距 (gap-8 -> gap-4) */}
+        {/* 客戶與送貨資訊 */}
         <div className="grid grid-cols-2 gap-4 mb-4 break-inside-avoid">
           
-          {/* 左邊：訂購經銷商 */}
           <div className="border-2 border-black rounded p-3">
             <h3 className="text-xs font-bold bg-gray-200 px-2 py-0.5 mb-2 inline-block rounded text-black print:border print:border-black">訂購經銷商 (Bill To)</h3>
             <div className="space-y-0.5 text-sm text-black">
@@ -78,7 +103,6 @@ export default function PrintDeliveryNotePage({ params }: { params: Promise<{ id
             </div>
           </div>
 
-          {/* 右邊：施工/送貨地點 */}
           <div className="border-2 border-black rounded p-3">
             <h3 className="text-xs font-bold bg-gray-200 px-2 py-0.5 mb-2 inline-block rounded text-black print:border print:border-black">送貨資訊 (Ship To)</h3>
             <div className="space-y-0.5 text-sm text-black">
@@ -119,9 +143,9 @@ export default function PrintDeliveryNotePage({ params }: { params: Promise<{ id
           </div>
         )}
 
-        {/* 產品明細 - 緊湊表格 */}
-        <div className="flex-1">
-          <table className="w-full mb-4 border-collapse">
+        {/* 產品明細 - ✨ 修改 3: 移除 flex-1，讓它自然佔用高度 */}
+        <div className="mb-4">
+          <table className="w-full border-collapse">
             <thead>
               <tr className="bg-gray-200 border-y-2 border-black text-xs text-black">
                 <th className="py-1 px-2 text-left w-8 font-bold">#</th>
@@ -143,8 +167,8 @@ export default function PrintDeliveryNotePage({ params }: { params: Promise<{ id
                       <p>材質: {item.materialName}</p>
                       <p>開向: {item.openingDirection}</p>
                       <p>模式: {item.serviceType === 'assembled' ? '連工帶料' : '純材料'}</p>
+                      {item.handleName && <p className="col-span-2 font-bold text-blue-900">把手: {item.handleName}</p>}
                     </div>
-                    {/* 尺寸顯示 */}
                     <div className="mt-1 bg-white px-1.5 py-0.5 rounded inline-block text-[10px] font-mono border border-black font-bold">
                       W: {item.widthMatrix?.mid} x H: {item.heightData?.singleValue || item.heightData?.mid}
                       {item.isCeilingMounted && <span className="ml-1 text-black font-extrabold">(封頂)</span>}
@@ -159,7 +183,7 @@ export default function PrintDeliveryNotePage({ params }: { params: Promise<{ id
           </table>
         </div>
 
-        {/* 總計與簽名 - 確保不被硬推到下一頁 */}
+        {/* 總計與簽名 - ✨ 修改 4: 確保跟隨內容，不被推到底部 */}
         <div className="break-inside-avoid">
           {showPrice && (
             <div className="flex justify-end mb-6 border-t-2 border-black pt-2">
@@ -170,7 +194,6 @@ export default function PrintDeliveryNotePage({ params }: { params: Promise<{ id
             </div>
           )}
 
-          {/* 底部簽名欄 - 縮減間距 */}
           <div className="mt-4 pt-4 border-t border-dashed border-gray-400">
             <div className="grid grid-cols-3 gap-8">
               <div className="text-center">

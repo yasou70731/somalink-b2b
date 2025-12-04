@@ -1,15 +1,17 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+// ✨ 修正：確保這裡有導入 Link
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Package, Clock, Truck, CheckCircle, Trash2, Hammer, XCircle, RefreshCw, Loader2 } from 'lucide-react';
+import { Package, Clock, Truck, CheckCircle, Trash2, Hammer, XCircle, RefreshCw, Loader2, Printer } from 'lucide-react';
 import { api } from '@/lib/api';
 import Modal from '@/components/Modal';
 import { useCart, CartItem } from '@/context/CartContext';
 
 // 定義介面 (與 API 回傳一致)
 interface OrderItem {
+  productId: string; 
   product: { 
     id: string; 
     name: string; 
@@ -47,16 +49,16 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // ✨ 權限檢查狀態
+  // 權限檢查狀態
   const [authChecking, setAuthChecking] = useState(true);
 
-  // ✨ 彈窗狀態
+  // 彈窗狀態
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, orderId: '' });
   const [reorderModal, setReorderModal] = useState({ isOpen: false, order: null as Order | null });
   const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
-    // ✨✨✨ 檢查是否登入 ✨✨✨
+    // 檢查是否登入
     const token = localStorage.getItem('somalink_token') || sessionStorage.getItem('somalink_token');
     if (!token) {
       router.replace('/login');
@@ -139,6 +141,17 @@ export default function OrdersPage() {
     router.push('/cart');
   };
 
+  // 處理列印開啟 (傳遞 Token)
+  const handlePrint = (orderId: string) => {
+    const token = localStorage.getItem('somalink_token') || sessionStorage.getItem('somalink_token');
+    if (token) {
+      window.open(`/orders/${orderId}/print?t=${token}`, '_blank');
+    } else {
+      alert('請先登入');
+      router.push('/login');
+    }
+  };
+
   const getStatusDisplay = (status: string) => {
     switch (status) {
       case 'pending': return { label: '待審核', color: 'bg-yellow-100 text-yellow-800', icon: <Clock className="w-4 h-4" /> };
@@ -150,7 +163,6 @@ export default function OrdersPage() {
     }
   };
 
-  // 如果還在檢查權限或載入中，顯示 Loading
   if (authChecking || loading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><Loader2 className="animate-spin text-blue-600 w-10 h-10" /></div>;
 
   return (
@@ -219,14 +231,14 @@ export default function OrdersPage() {
                   </div>
 
                   <div className="flex justify-end items-center gap-3">
-                    {/* ✨✨✨ 再次購買按鈕 ✨✨✨ */}
+                    {/* ✨ 修正：這裡改為呼叫 confirmReorder (觸發彈窗)，而不是 handleReorder (執行動作) */}
                     <button 
                       onClick={() => confirmReorder(order)}
                       className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 border border-blue-200"
                     >
                       <RefreshCw className="w-4 h-4" /> 再次購買
                     </button>
-
+                    
                     {order.status === 'pending' && (
                       <button 
                         onClick={() => confirmDelete(order.id)}
@@ -237,7 +249,12 @@ export default function OrdersPage() {
                       </button>
                     )}
                     
-                    <Link href={`/orders/${order.id}/print`} target="_blank" className="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg font-bold text-sm transition-colors">列印工單</Link>
+                    <button 
+                      onClick={() => handlePrint(order.id)}
+                      className="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg font-bold text-sm transition-colors flex items-center gap-2"
+                    >
+                      <Printer className="w-4 h-4" /> 列印工單
+                    </button>
                   </div>
                 </div>
               );

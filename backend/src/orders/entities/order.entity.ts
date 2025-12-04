@@ -10,7 +10,8 @@ export enum OrderStatus {
   CANCELLED = 'cancelled',   
 }
 
-@Entity()
+// ✨✨✨ 修正重點：明確指定表名為 'orders' (複數)，避開 SQL 保留字 'order' ✨✨✨
+@Entity('orders')
 export class Order {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -18,8 +19,6 @@ export class Order {
   @Column({ unique: true })
   orderNumber: string;
 
-  // ✨✨✨ 修改重點：加入 onDelete: 'CASCADE' ✨✨✨
-  // 這行代碼的意思是：當關聯的 User 被刪除時，自動刪除這筆 Order
   @ManyToOne(() => User, { eager: true, onDelete: 'CASCADE' })
   user: User;
 

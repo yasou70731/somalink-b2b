@@ -2,12 +2,11 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LayoutDashboard, Package, Users, Settings, LogOut, Layers, BarChart3 } from "lucide-react"; // ✨ 引入 BarChart3 圖示
+import { LayoutDashboard, Package, Users, Settings, LogOut, Layers, BarChart3, ClipboardList } from "lucide-react"; // ✨ 新增 ClipboardList
 
 export default function Sidebar() {
   const router = useRouter();
 
-  // 登出邏輯
   const handleLogout = () => {
     if (confirm('確定要登出管理後台嗎？')) {
       localStorage.removeItem('somalink_admin_token');
@@ -34,10 +33,9 @@ export default function Sidebar() {
           className="flex items-center px-3 py-3 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors group"
         >
           <LayoutDashboard className="w-5 h-5 mr-3 group-hover:text-blue-400 transition-colors" />
-          訂單戰情室
+          订單戰情室
         </Link>
 
-        {/* ✨ 新增：營運報表按鈕 */}
         <Link 
           href="/reports" 
           className="flex items-center px-3 py-3 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors group"
@@ -68,6 +66,15 @@ export default function Sidebar() {
         >
           <Users className="w-5 h-5 mr-3 group-hover:text-blue-400 transition-colors" />
           會員管理
+        </Link>
+
+        {/* ✨ 新增：系統日誌 */}
+        <Link 
+          href="/logs" 
+          className="flex items-center px-3 py-3 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors group"
+        >
+          <ClipboardList className="w-5 h-5 mr-3 group-hover:text-blue-400 transition-colors" />
+          系統日誌
         </Link>
 
         <div className="pt-4 mt-4 border-t border-slate-800">

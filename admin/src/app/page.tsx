@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link'; 
 import { 
   LayoutDashboard, Bell, Search, Filter, 
-  CheckCircle, Clock, Info, ChevronRight, FileSpreadsheet, Calendar, User, Truck, Hammer
+  CheckCircle, Clock, Info, ChevronRight, FileSpreadsheet, Calendar, User, Truck, Hammer, X
 } from 'lucide-react';
 import clsx from 'clsx';
 import * as XLSX from 'xlsx';
@@ -14,11 +15,14 @@ import OrderDetailModal from '@/components/OrderDetailModal';
 export default function AdminDashboard() {
   const router = useRouter();
   
-  // ✨ Fix 1: 確保初始值為空陣列，避免 undefined
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   
+  // ✨ 通知選單狀態
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+  
+  // 篩選狀態
   const [searchTerm, setSearchTerm] = useState('');
   const [dealerFilter, setDealerFilter] = useState('');
   const [dateFilter, setDateFilter] = useState('');
@@ -34,31 +38,33 @@ export default function AdminDashboard() {
       setLoading(true);
       const res = await api.get('/orders');
       
-      // ✨ Fix 2: 嚴格檢查 res 是否為陣列 (因為 api.ts 已經解構過 response.data)
       if (Array.isArray(res)) {
         setOrders(res);
       } else {
         console.warn('API 回傳格式異常 (預期為陣列):', res);
-        setOrders([]); // 格式不對時，強制設為空陣列
+        setOrders([]); 
       }
     } catch (err) {
       console.error('無法取得訂單列表:', err);
-      setOrders([]); // 發生錯誤時，強制設為空陣列
+      setOrders([]); 
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    // 只有在瀏覽器端且有 Token 時才撈資料
     if (typeof window !== 'undefined' && localStorage.getItem('somalink_admin_token')) {
       fetchOrders();
     }
   }, [fetchOrders]);
 
+  // ✨ 計算待審核訂單 (通知用)
+  const pendingOrders = useMemo(() => {
+    return (orders || []).filter(o => o.status === 'pending');
+  }, [orders]);
+
   // 過濾邏輯
   const filteredOrders = useMemo(() => {
-    // ✨ Fix 3: 加入 (orders || []) 保護，防止 orders 為 undefined 時 filter 報錯
     return (orders || []).filter(order => {
       if (!order) return false;
       
@@ -115,22 +121,84 @@ export default function AdminDashboard() {
   };
 
   return (
-    <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+    <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-gray-50">
       
-      <header className="bg-white shadow-sm border-b border-gray-200 h-16 flex items-center justify-between px-8 sticky top-0 z-10">
+      <header className="bg-white shadow-sm border-b border-gray-200 h-16 flex items-center justify-between px-8 sticky top-0 z-20">
         <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
           <LayoutDashboard className="w-5 h-5 text-gray-500" />
           訂單戰情室
         </h2>
-        <div className="flex items-center gap-4">
-          <button className="p-2 text-gray-400 hover:bg-gray-100 rounded-full relative">
-            <Bell className="w-5 h-5" /><span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"></span>
+        
+        {/* ✨✨✨ 通知中心區域 ✨✨✨ */}
+        <div className="flex items-center gap-4 relative">
+          <button 
+            onClick={() => setIsNotifOpen(!isNotifOpen)}
+            className={clsx(
+              "p-2 rounded-full relative transition-colors",
+              isNotifOpen ? "bg-blue-50 text-blue-600" : "text-gray-400 hover:bg-gray-100"
+            )}
+            title="通知中心"
+          >
+            <Bell className="w-5 h-5" />
+            {/* ✨ 動態顯示待審核數量 */}
+            {pendingOrders.length > 0 && (
+              <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white animate-in zoom-in duration-300">
+                {pendingOrders.length > 9 ? '9+' : pendingOrders.length}
+              </span>
+            )}
           </button>
+
+          {/* ✨ 下拉通知選單 */}
+          {isNotifOpen && (
+            <>
+              {/* 點擊外部關閉遮罩 */}
+              <div className="fixed inset-0 z-10" onClick={() => setIsNotifOpen(false)} />
+              
+              <div className="absolute right-0 top-12 w-80 bg-white rounded-xl shadow-xl border border-gray-200 z-20 overflow-hidden animate-in slide-in-from-top-2 duration-200">
+                <div className="p-3 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                  <h3 className="font-bold text-gray-700 text-sm">待處理訂單 ({pendingOrders.length})</h3>
+                  <button onClick={() => setIsNotifOpen(false)} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
+                </div>
+                
+                <div className="max-h-[300px] overflow-y-auto">
+                  {pendingOrders.length === 0 ? (
+                    <div className="p-8 text-center text-gray-400 text-sm">目前沒有新訂單 🎉</div>
+                  ) : (
+                    pendingOrders.slice(0, 5).map(order => (
+                      <div 
+                        key={order.id}
+                        onClick={() => {
+                          setSelectedOrder(order); // 打開詳情 Modal
+                          setIsNotifOpen(false);   // 關閉通知選單
+                        }}
+                        className="p-3 border-b border-gray-50 hover:bg-blue-50 cursor-pointer transition-colors group"
+                      >
+                        <div className="flex justify-between items-start mb-1">
+                          <span className="text-xs font-bold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded">新訂單</span>
+                          <span className="text-[10px] text-gray-400">{new Date(order.createdAt).toLocaleDateString()}</span>
+                        </div>
+                        <p className="text-sm font-bold text-gray-800 group-hover:text-blue-700">{order.user?.dealerProfile?.companyName || '未知客戶'}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">單號：{order.orderNumber}</p>
+                        <p className="text-xs text-gray-500">金額：${Number(order.totalAmount).toLocaleString()}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+                
+                <div className="p-2 bg-gray-50 border-t border-gray-100 text-center">
+                  <Link href="/logs" className="text-xs text-blue-600 hover:underline font-medium">
+                    查看所有系統日誌 &rarr;
+                  </Link>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </header>
 
       <div className="flex-1 overflow-y-auto p-8">
         
+        {/* 上方數據卡片 */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
             <p className="text-sm text-gray-500 font-medium uppercase tracking-wider">篩選結果筆數</p>
@@ -154,49 +222,25 @@ export default function AdminDashboard() {
           </div>
         </div>
 
+        {/* 訂單列表 (維持原樣) */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           
           <div className="p-5 border-b border-gray-100 bg-gray-50/50 flex flex-wrap items-center gap-4">
-            
             <div className="relative w-64">
               <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
-              <input 
-                type="text" 
-                placeholder="搜尋單號、案名..." 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" 
-              />
+              <input type="text" placeholder="搜尋單號、案名..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
             </div>
-
             <div className="relative w-48">
               <User className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
-              <input 
-                type="text" 
-                placeholder="篩選經銷商名稱" 
-                value={dealerFilter}
-                onChange={(e) => setDealerFilter(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" 
-              />
+              <input type="text" placeholder="篩選經銷商名稱" value={dealerFilter} onChange={(e) => setDealerFilter(e.target.value)} className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
             </div>
-
             <div className="relative w-48">
               <Calendar className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
-              <input 
-                type="date" 
-                value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none text-gray-600" 
-              />
+              <input type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none text-gray-600" />
             </div>
-
             <div className="relative w-40">
               <Filter className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
-              <select 
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full pl-9 pr-8 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none appearance-none bg-white text-gray-600 cursor-pointer"
-              >
+              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full pl-9 pr-8 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none appearance-none bg-white text-gray-600 cursor-pointer">
                 <option value="all">全部狀態</option>
                 <option value="pending">待審核</option>
                 <option value="processing">生產中</option>
@@ -204,32 +248,13 @@ export default function AdminDashboard() {
                 <option value="completed">已完成</option>
                 <option value="cancelled">已取消</option>
               </select>
-              <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
-                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-              </div>
+              <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none"><svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg></div>
             </div>
-
             {(searchTerm || dealerFilter || dateFilter || statusFilter !== 'all') && (
-              <button 
-                onClick={() => {
-                  setSearchTerm('');
-                  setDealerFilter('');
-                  setDateFilter('');
-                  setStatusFilter('all');
-                }}
-                className="text-xs text-red-500 hover:underline px-2"
-              >
-                清除篩選
-              </button>
+              <button onClick={() => { setSearchTerm(''); setDealerFilter(''); setDateFilter(''); setStatusFilter('all'); }} className="text-xs text-red-500 hover:underline px-2">清除篩選</button>
             )}
-
             <div className="ml-auto">
-              <button 
-                onClick={handleExportExcel}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 shadow-sm transition-all"
-              >
-                <FileSpreadsheet className="w-4 h-4" /> 匯出 Excel
-              </button>
+              <button onClick={handleExportExcel} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 shadow-sm transition-all"><FileSpreadsheet className="w-4 h-4" /> 匯出 Excel</button>
             </div>
           </div>
 

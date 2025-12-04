@@ -4,7 +4,7 @@ import { TradeCategory } from './trade-category.entity';
 import { CartItem } from '../../cart/entities/cart-item.entity';
 
 export enum UserRole {
-  // ✨✨✨ 修正：改回小寫，以符合資料庫現有的 Enum 定義 ✨✨✨
+  // ✨✨✨ 修正：將值改為小寫，以符合資料庫現有的 user_role_enum 定義 ✨✨✨
   ADMIN = 'admin',
   DEALER = 'dealer',
 }

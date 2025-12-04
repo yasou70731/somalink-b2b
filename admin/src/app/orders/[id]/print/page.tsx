@@ -40,10 +40,10 @@ export default function PrintDeliveryNotePage({ params }: { params: Promise<{ id
         </button>
       </div>
 
-      {/* A4 紙張區域 - 優化間距 (p-8 -> p-6) */}
-      <div className="max-w-[210mm] mx-auto bg-white shadow-xl print:shadow-none p-8 print:p-6 min-h-[297mm] text-black font-sans relative flex flex-col box-border">
+      {/* A4 紙張區域 - 省紙模式：移除固定高度，改為自動適應內容 */}
+      <div className="max-w-[210mm] mx-auto bg-white shadow-xl print:shadow-none p-8 print:p-6 text-black font-sans relative box-border print:h-auto print:min-h-0">
         
-        {/* Header - 縮減下方間距 (pb-6 -> pb-4, mb-6 -> mb-4) */}
+        {/* Header */}
         <div className="flex justify-between items-start border-b-4 border-black pb-4 mb-4">
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 bg-black text-white flex items-center justify-center text-2xl font-bold rounded-lg print:border print:border-black">S</div>
@@ -65,10 +65,8 @@ export default function PrintDeliveryNotePage({ params }: { params: Promise<{ id
           </div>
         </div>
 
-        {/* 客戶與送貨資訊 - 縮減間距 (gap-8 -> gap-4) */}
+        {/* 客戶與送貨資訊 */}
         <div className="grid grid-cols-2 gap-4 mb-4 break-inside-avoid">
-          
-          {/* 左邊：訂購經銷商 */}
           <div className="border-2 border-black rounded p-3">
             <h3 className="text-xs font-bold bg-gray-200 px-2 py-0.5 mb-2 inline-block rounded text-black print:border print:border-black">訂購經銷商 (Bill To)</h3>
             <div className="space-y-0.5 text-sm text-black">
@@ -77,8 +75,6 @@ export default function PrintDeliveryNotePage({ params }: { params: Promise<{ id
               <p><span className="font-bold w-16 inline-block">電話：</span>{order.user?.dealerProfile?.phone}</p>
             </div>
           </div>
-
-          {/* 右邊：施工/送貨地點 */}
           <div className="border-2 border-black rounded p-3">
             <h3 className="text-xs font-bold bg-gray-200 px-2 py-0.5 mb-2 inline-block rounded text-black print:border print:border-black">送貨資訊 (Ship To)</h3>
             <div className="space-y-0.5 text-sm text-black">
@@ -86,23 +82,13 @@ export default function PrintDeliveryNotePage({ params }: { params: Promise<{ id
                 <p className="text-[10px] font-bold text-black">案場名稱</p>
                 <p className="font-bold text-base leading-tight">{order.projectName}</p>
               </div>
-              
               <div className="flex items-start gap-1 mb-1">
                 <MapPin className="w-3.5 h-3.5 mt-0.5 text-black shrink-0" />
-                <span className="font-bold border-b border-black pb-0 text-sm leading-tight">
-                  {order.shippingAddress || '未指定地址 (同經銷商)'}
-                </span>
+                <span className="font-bold border-b border-black pb-0 text-sm leading-tight">{order.shippingAddress || '未指定地址 (同經銷商)'}</span>
               </div>
-
               <div className="grid grid-cols-2 gap-1 text-xs">
-                <p className="flex items-center font-medium">
-                  <User className="w-3 h-3 mr-1 text-black" /> 
-                  {order.siteContactPerson || order.user?.dealerProfile?.contactPerson}
-                </p>
-                <p className="flex items-center font-medium">
-                  <Phone className="w-3 h-3 mr-1 text-black" /> 
-                  {order.siteContactPhone || order.user?.dealerProfile?.phone}
-                </p>
+                <p className="flex items-center font-medium"><User className="w-3 h-3 mr-1 text-black" /> {order.siteContactPerson || order.user?.dealerProfile?.contactPerson}</p>
+                <p className="flex items-center font-medium"><Phone className="w-3 h-3 mr-1 text-black" /> {order.siteContactPhone || order.user?.dealerProfile?.phone}</p>
               </div>
             </div>
           </div>
@@ -119,9 +105,9 @@ export default function PrintDeliveryNotePage({ params }: { params: Promise<{ id
           </div>
         )}
 
-        {/* 產品明細 - 緊湊表格 */}
-        <div className="flex-1">
-          <table className="w-full mb-4 border-collapse">
+        {/* 產品明細 - 不再強制推到底部 */}
+        <div className="mb-4">
+          <table className="w-full border-collapse">
             <thead>
               <tr className="bg-gray-200 border-y-2 border-black text-xs text-black">
                 <th className="py-1 px-2 text-left w-8 font-bold">#</th>
@@ -143,8 +129,8 @@ export default function PrintDeliveryNotePage({ params }: { params: Promise<{ id
                       <p>材質: {item.materialName}</p>
                       <p>開向: {item.openingDirection}</p>
                       <p>模式: {item.serviceType === 'assembled' ? '連工帶料' : '純材料'}</p>
+                      {item.handleName && <p className="col-span-2 font-bold text-blue-900">把手: {item.handleName}</p>}
                     </div>
-                    {/* 尺寸顯示 */}
                     <div className="mt-1 bg-white px-1.5 py-0.5 rounded inline-block text-[10px] font-mono border border-black font-bold">
                       W: {item.widthMatrix?.mid} x H: {item.heightData?.singleValue || item.heightData?.mid}
                       {item.isCeilingMounted && <span className="ml-1 text-black font-extrabold">(封頂)</span>}
@@ -159,7 +145,7 @@ export default function PrintDeliveryNotePage({ params }: { params: Promise<{ id
           </table>
         </div>
 
-        {/* 總計與簽名 - 確保不被硬推到下一頁 */}
+        {/* 總計與簽名 - 確保跟隨內容 */}
         <div className="break-inside-avoid">
           {showPrice && (
             <div className="flex justify-end mb-6 border-t-2 border-black pt-2">
@@ -170,7 +156,6 @@ export default function PrintDeliveryNotePage({ params }: { params: Promise<{ id
             </div>
           )}
 
-          {/* 底部簽名欄 - 縮減間距 */}
           <div className="mt-4 pt-4 border-t border-dashed border-gray-400">
             <div className="grid grid-cols-3 gap-8">
               <div className="text-center">
