@@ -3,10 +3,11 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Trash2, ArrowRight, Loader2, ShoppingBag, AlertCircle, Hammer, Package, MessageSquare, MapPin, Building2, User, Phone, Copy, UploadCloud, FileText, X } from 'lucide-react';
+// ✨ 新增 Printer 圖示
+import { Trash2, ArrowRight, Loader2, ShoppingBag, AlertCircle, Hammer, Package, MessageSquare, MapPin, Building2, User, Phone, Copy, UploadCloud, FileText, X, Printer } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { api } from '@/lib/api';
-import Modal from '@/components/Modal'; // ✨ 引入通用彈窗
+import Modal from '@/components/Modal'; 
 
 const CLOUDINARY_CLOUD_NAME = 'dnibj8za6'; 
 const CLOUDINARY_PRESET = 'yasou70731';  
@@ -17,23 +18,30 @@ export default function CartPage() {
   
   const [mounted, setMounted] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [authChecking, setAuthChecking] = useState(true);
 
-  // ✨ Modal 狀態管理
   const [modalConfig, setModalConfig] = useState({
     isOpen: false,
     title: '',
     message: '',
     type: 'info' as 'success' | 'error' | 'info' | 'warning',
-    redirect: '' // 點擊確定後是否要跳轉
+    redirect: '' 
   });
 
   useEffect(() => {
+    const token = localStorage.getItem('somalink_token') || sessionStorage.getItem('somalink_token');
+    if (!token) {
+      router.replace('/login');
+      return;
+    }
+    setAuthChecking(false);
+
     setMounted(true);
     const stored = localStorage.getItem('somalink_user') || sessionStorage.getItem('somalink_user');
     if (stored) {
       try { setCurrentUser(JSON.parse(stored)); } catch(e) {}
     }
-  }, []);
+  }, [router]);
 
   const [projectName, setProjectName] = useState('');
   const [shippingAddress, setShippingAddress] = useState(''); 
@@ -47,7 +55,6 @@ export default function CartPage() {
   const [agreed, setAgreed] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // ✨ 顯示彈窗 Helper
   const showAlert = (title: string, message: string, type: 'error' | 'success' | 'info' | 'warning' = 'error', redirect = '') => {
     setModalConfig({ isOpen: true, title, message, type, redirect });
   };
@@ -100,8 +107,29 @@ export default function CartPage() {
     setAttachments(prev => prev.filter((_, i) => i !== index));
   };
 
+  // ✨✨✨ 新增：產生報價單邏輯 ✨✨✨
+  const handlePrintQuotation = () => {
+    if (!projectName.trim()) { showAlert('欄位未填', '請輸入案場名稱，以便顯示在報價單上', 'warning'); return; }
+    
+    // 1. 打包目前購物車資料
+    const quotationData = {
+      projectName,
+      shippingAddress,
+      siteContactPerson,
+      siteContactPhone,
+      items,
+      totalAmount: cartTotal,
+      createdAt: new Date().toISOString()
+    };
+
+    // 2. 存入 SessionStorage (暫存)
+    sessionStorage.setItem('soma_quotation_draft', JSON.stringify(quotationData));
+
+    // 3. 開啟預覽頁
+    window.open('/quotation/preview', '_blank');
+  };
+
   const handleSubmit = async () => {
-    // ✨ 改用 showAlert 取代 alert
     if (!projectName.trim()) { showAlert('欄位未填', '請輸入案場名稱', 'warning'); return; }
     if (!shippingAddress.trim()) { showAlert('欄位未填', '請輸入施工/送貨地址', 'warning'); return; }
     if (!siteContactPerson.trim()) { showAlert('欄位未填', '請輸入現場聯絡人', 'warning'); return; }
@@ -128,7 +156,6 @@ export default function CartPage() {
           siteConditions: item.siteConditions,
           colorName: item.colorName,
           materialName: item.materialName,
-          // ✨ 傳送把手資訊
           handleName: item.handleName,
           openingDirection: item.openingDirection,
           hasThreshold: item.hasThreshold,
@@ -141,7 +168,6 @@ export default function CartPage() {
       await api.post('/orders', payload);
       clearCart();
       
-      // ✨ 成功後顯示彈窗並跳轉
       showAlert('訂單已送出！', '您的訂單已成功建立，請至「歷史訂單」查看進度。', 'success', '/orders');
 
     } catch (error: any) {
@@ -156,6 +182,7 @@ export default function CartPage() {
     }
   };
 
+  if (authChecking) return <div className="min-h-screen flex justify-center items-center bg-gray-50"><Loader2 className="animate-spin text-blue-600" /></div>;
   if (!mounted) return null;
 
   if (items.length === 0) {
@@ -175,7 +202,6 @@ export default function CartPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 py-12">
-      {/* ✨ 全域彈窗元件 */}
       <Modal 
         isOpen={modalConfig.isOpen}
         title={modalConfig.title}
@@ -217,7 +243,6 @@ export default function CartPage() {
                     )}
                   </div>
                   <div className="mt-2 space-y-1 text-sm text-gray-600">
-                    {/* ✨ 顯示把手名稱 */}
                     <p><span className="font-medium">規格：</span>{item.colorName} / {item.materialName} / {item.handleName || '無把手'} / {item.openingDirection}</p>
                     <p><span className="font-medium">尺寸：</span>W {item.widthMatrix.mid}cm x H {item.heightData.singleValue || item.heightData.mid || 'N/A'}cm {item.isCeilingMounted && <span className="ml-2 px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">封頂</span>}</p>
                     {item.siteConditions?.floor && <p className="text-orange-600 text-xs flex items-center gap-1"><AlertCircle className="w-3 h-3" /> 地面水平誤差: {item.siteConditions.floor.diff}cm</p>}
@@ -271,7 +296,6 @@ export default function CartPage() {
 
               <div className="mb-6">
                 <label className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-2"><UploadCloud className="w-3.5 h-3.5" /> 附件上傳 (現場照/CAD圖) 選填</label>
-                
                 <div className="flex flex-wrap gap-2 mb-2">
                   {attachments.map((url, index) => (
                     <div key={index} className="relative group">
@@ -286,7 +310,6 @@ export default function CartPage() {
                       <button onClick={() => removeAttachment(index)} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"><X className="w-3 h-3" /></button>
                     </div>
                   ))}
-                  
                   <label className="w-12 h-12 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center cursor-pointer hover:bg-gray-50 hover:border-blue-400 transition-colors">
                     {isUploading ? <Loader2 className="w-5 h-5 text-blue-500 animate-spin" /> : <UploadCloud className="w-5 h-5 text-gray-400" />}
                     <input type="file" multiple onChange={handleFileUpload} className="hidden" disabled={isUploading} />
@@ -305,9 +328,24 @@ export default function CartPage() {
                 <span className="text-sm text-gray-600 leading-relaxed">我已確認上述規格無誤，並同意服務條款。</span>
               </label>
 
-              <button onClick={handleSubmit} disabled={isSubmitting} className="w-full py-4 bg-gray-900 hover:bg-black text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 disabled:opacity-70">
-                {isSubmitting ? <Loader2 className="animate-spin w-5 h-5" /> : <>確認下單 <ArrowRight className="w-5 h-5" /></>}
-              </button>
+              {/* ✨✨✨ 新增按鈕區域 (包含報價單下載) ✨✨✨ */}
+              <div className="space-y-3">
+                <button 
+                  onClick={handlePrintQuotation}
+                  className="w-full py-3 bg-white border-2 border-blue-600 text-blue-600 font-bold rounded-xl hover:bg-blue-50 transition-all flex items-center justify-center gap-2"
+                >
+                  <Printer className="w-5 h-5" /> 下載 / 列印報價單
+                </button>
+
+                <button 
+                  onClick={handleSubmit} 
+                  disabled={isSubmitting} 
+                  className="w-full py-4 bg-gray-900 hover:bg-black text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 disabled:opacity-70"
+                >
+                  {isSubmitting ? <Loader2 className="animate-spin w-5 h-5" /> : <>確認下單 <ArrowRight className="w-5 h-5" /></>}
+                </button>
+              </div>
+
             </div>
           </div>
         </div>

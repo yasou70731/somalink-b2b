@@ -4,40 +4,75 @@ import axios from 'axios';
 
 @Injectable()
 export class NotificationsService {
-  // 1. 寄送 Email (給經銷商)
-  async sendEmail(to: string, subject: string, text: string) {
-    // TODO: 階段二會在這裡填入真的 Gmail/Resend 設定
-    // 目前先用 console.log 模擬
-    console.log('=================================================');
-    console.log('📧 [模擬寄信] 準備發送 Email...');
-    console.log(`收件人: ${to}`);
-    console.log(`主旨: ${subject}`);
-    console.log(`內容: ${text}`);
-    console.log('=================================================');
-    
-    // 假裝發送成功
-    return true;
+  private transporter;
+
+  constructor() {
+    // 初始化 Nodemailer
+    // 只有在設定了 SMTP_USER 時才啟用，避免開發環境報錯
+    if (process.env.SMTP_USER) {
+      this.transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST || 'smtp.gmail.com',
+        port: Number(process.env.SMTP_PORT) || 465,
+        secure: true, // true for 465, false for other ports
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+      });
+    }
   }
 
-  // 2. 發送 Line Notify (給工廠管理員)
-  async sendLineNotify(message: string) {
-    // TODO: 階段二會在這裡填入 Line Token
-    // 目前先用 console.log 模擬
-    console.log('=================================================');
-    console.log('🔔 [模擬 Line] 準備發送通知給管理員...');
-    console.log(`訊息: ${message}`);
-    console.log('=================================================');
+  // 1. 寄送 Email (給經銷商)
+  async sendEmail(to: string, subject: string, text: string, html?: string) {
+    // 開發模式或未設定 SMTP 時，只印 Log
+    if (!this.transporter) {
+      console.log('=================================================');
+      console.log('📧 [模擬寄信] (未設定 SMTP)');
+      console.log(`收件人: ${to}`);
+      console.log(`主旨: ${subject}`);
+      console.log(`內容: ${text}`);
+      console.log('=================================================');
+      return true;
+    }
 
-    /* 真實程式碼預留區 (等拿到 Token 解開註解即可)
+    try {
+      await this.transporter.sendMail({
+        from: process.env.SMTP_FROM || '"SomaLink System" <no-reply@example.com>',
+        to,
+        subject,
+        text, // 純文字版本
+        html: html || text.replace(/\n/g, '<br>'), // 簡單的 HTML 轉換
+      });
+      console.log(`✅ Email sent to ${to}`);
+      return true;
+    } catch (error) {
+      console.error('❌ Email sending failed:', error);
+      return false;
+    }
+  }
+
+  // 2. 發送 Line Notify (保持不變)
+  async sendLineNotify(message: string) {
     const token = process.env.LINE_NOTIFY_TOKEN;
-    if (token) {
+    
+    if (!token) {
+        console.log('=================================================');
+        console.log('🔔 [模擬 Line] (未設定 Token)');
+        console.log(`訊息: ${message}`);
+        console.log('=================================================');
+        return true;
+    }
+
+    try {
       await axios.post(
         'https://notify-api.line.me/api/notify',
-        `message=${encodeURIComponent(message)}`,
-        { headers: { Authorization: `Bearer ${token}` } }
+        new URLSearchParams({ message }).toString(),
+        { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/x-www-form-urlencoded' } }
       );
+      return true;
+    } catch (error) {
+      console.error('Line Notify failed:', error);
+      return false;
     }
-    */
-    return true;
   }
 }

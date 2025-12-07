@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import Link from "next/link";
+import Image from 'next/image'; // ✨ 1. 引入 Next.js Image 元件
 import { ArrowRight } from "lucide-react";
 
 export default function HeroBlock({ data }: { data: any }) {
@@ -18,13 +19,27 @@ export default function HeroBlock({ data }: { data: any }) {
   return (
     <div className="relative h-[85vh] w-full overflow-hidden bg-gray-900">
       {images.map((src: string, index: number) => (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img 
-          key={index} src={src} alt="Hero"
-          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${index === currentImageIndex ? 'opacity-100' : 'opacity-0'}`}
-        />
+        // ✨ 2. 使用 div 包裹 Image 處理淡入淡出 (transition-opacity)
+        <div 
+          key={index} 
+          className={`absolute inset-0 w-full h-full transition-opacity duration-1000 ${index === currentImageIndex ? 'opacity-100' : 'opacity-0'}`}
+        >
+          {/* ✨ 3. 使用 <Image /> 取代 <img> */}
+          <Image
+            src={src} 
+            alt="Hero"
+            fill // 自動填滿父層 div
+            className="object-cover" // 保持比例裁切
+            priority={index === 0} // 第一張圖優先載入 (提升效能分數)
+            sizes="100vw" // 告訴瀏覽器這張圖佔滿視窗寬度
+          />
+        </div>
       ))}
+      
+      {/* 黑色遮罩 */}
       <div className="absolute inset-0 bg-black/40" />
+      
+      {/* 文字內容 */}
       <div className="relative z-10 h-full max-w-7xl mx-auto px-6 flex flex-col justify-center items-start text-white">
         <span className="bg-blue-600 text-white px-4 py-1 rounded-full text-sm font-bold mb-6">SOMA 松成有限公司</span>
         <h1 className="text-5xl md:text-7xl font-bold leading-tight mb-6 whitespace-pre-wrap">{data.title}</h1>

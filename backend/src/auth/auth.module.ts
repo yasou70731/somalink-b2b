@@ -3,13 +3,17 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { UsersModule } from '../users/users.module';
 import { JwtModule } from '@nestjs/jwt';
-import { ConfigModule, ConfigService } from '@nestjs/config'; // 確保引入 ConfigModule
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtStrategy } from './jwt.strategy';
+// ✨ 引入 NotificationsModule
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
-    ConfigModule, // ✨ 關鍵修正：這裡必須明確匯入 ConfigModule，JwtStrategy 才讀得到
+    ConfigModule,
     UsersModule,
+    // ✨ 註冊 NotificationsModule
+    NotificationsModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({

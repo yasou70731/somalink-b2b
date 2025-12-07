@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-// ✨ 設定 1：強制指向本機後端，解決連線到雲端舊資料的問題
+// ✨ 設定：強制指向本機後端 (開發時) 或線上版 (部署時)
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 // --- TypeScript 介面定義區 ---
@@ -19,8 +19,12 @@ export interface OrderItem {
   siteConditions?: any;
   colorName: string;
   materialName: string;
+  
+  // ✨✨✨ 補上這些缺少的欄位 ✨✨✨
+  handleName?: string; // 把手
   openingDirection: string;
   hasThreshold: boolean;
+  
   quantity: number;
   subtotal: number;
   priceSnapshot?: any;
@@ -41,11 +45,11 @@ export interface Order {
   totalAmount: number;
   createdAt: string;
   projectName: string;
+  
+  // ✨✨✨ 補上收貨與附件欄位 ✨✨✨
   shippingAddress?: string;
   siteContactPerson?: string;
   siteContactPhone?: string;
-  
-  // ✨ 補上附件欄位定義
   attachments?: string[];
 
   user: {
@@ -73,11 +77,8 @@ const axiosInstance = axios.create({
   },
 });
 
-// ✨ 設定 2：請求攔截器 (修正 Token 讀取位置)
 axiosInstance.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
-    // ⚠️ 關鍵修正：後台必須讀取 'somalink_admin_token'
-    // 如果讀成前台的 'somalink_token' 就會導致 401 錯誤
     const token = localStorage.getItem('somalink_admin_token');
     
     if (token) {
@@ -107,7 +108,7 @@ export const api = {
     return response.data;
   },
   
-  // 圖片上傳 (Cloudinary)
+  // 圖片上傳
   uploadImage: async (file: File) => {
     const formData = new FormData();
     formData.append('file', file);

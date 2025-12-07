@@ -18,6 +18,7 @@ export interface OrderItem {
   siteConditions?: any;
   colorName: string;
   materialName: string;
+  // ✨✨✨ 新增把手欄位 ✨✨✨
   handleName?: string;
   openingDirection: string;
   hasThreshold: boolean;
@@ -26,6 +27,7 @@ export interface OrderItem {
   priceSnapshot: any;
 }
 
+// 定義訂單狀態 Enum
 export enum OrderStatus {
   PENDING = 'pending',       
   PROCESSING = 'processing', 
@@ -34,6 +36,7 @@ export enum OrderStatus {
   CANCELLED = 'cancelled',   
 }
 
+// 定義完整訂單介面
 export interface Order {
   id: string;
   orderNumber: string;
@@ -41,15 +44,21 @@ export interface Order {
   totalAmount: number;
   createdAt: string;
   projectName: string;
+  
+  // 收貨與聯絡資訊
   shippingAddress?: string;
   siteContactPerson?: string;
   siteContactPhone?: string;
+  
+  // 附件
   attachments?: string[];
+
   customerNote?: string;
   adminNote?: string;
   items: OrderItem[]; 
 }
 
+// 建立 Axios 實例
 const axiosInstance = axios.create({
   baseURL: API_URL,
   headers: {
@@ -57,8 +66,11 @@ const axiosInstance = axios.create({
   },
 });
 
+// 請求攔截器：自動帶入 Token
 axiosInstance.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
+    // 前台使用的是 'somalink_token'
+    // 同時檢查 LocalStorage 和 SessionStorage (記住我功能)
     const token = localStorage.getItem('somalink_token') || sessionStorage.getItem('somalink_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -84,6 +96,21 @@ export const api = {
     const response = await axiosInstance.delete(url);
     return response.data;
   },
+  
+  // ✨✨✨ 新增：認證相關 API (忘記密碼/重設密碼) ✨✨✨
+  auth: {
+    // 申請重設
+    forgotPassword: async (email: string) => {
+      const response = await axiosInstance.post('/auth/forgot-password', { email });
+      return response.data;
+    },
+    // 執行重設
+    resetPassword: async (token: string, password: string) => {
+      const response = await axiosInstance.post('/auth/reset-password', { token, password });
+      return response.data;
+    },
+  },
+
   // ✨✨✨ 新增：購物車專用 API ✨✨✨
   cart: {
     // 取得購物車

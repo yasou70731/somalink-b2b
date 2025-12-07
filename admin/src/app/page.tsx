@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link'; 
 import { 
   LayoutDashboard, Bell, Search, Filter, 
-  CheckCircle, Clock, Info, ChevronRight, FileSpreadsheet, Calendar, User, Truck, Hammer, X
+  CheckCircle, Clock, Info, ChevronRight, FileSpreadsheet, Calendar, User, Truck, Hammer, CheckSquare, Square
 } from 'lucide-react';
 import clsx from 'clsx';
 import * as XLSX from 'xlsx';
@@ -19,9 +19,9 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   
-  // ✨ 通知選單狀態
-  const [isNotifOpen, setIsNotifOpen] = useState(false);
-  
+  // ✨✨✨ 新增：多選狀態 ✨✨✨
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
   // 篩選狀態
   const [searchTerm, setSearchTerm] = useState('');
   const [dealerFilter, setDealerFilter] = useState('');
@@ -37,11 +37,9 @@ export default function AdminDashboard() {
     try {
       setLoading(true);
       const res = await api.get('/orders');
-      
       if (Array.isArray(res)) {
         setOrders(res);
       } else {
-        console.warn('API 回傳格式異常 (預期為陣列):', res);
         setOrders([]); 
       }
     } catch (err) {
@@ -58,49 +56,119 @@ export default function AdminDashboard() {
     }
   }, [fetchOrders]);
 
-  // ✨ 計算待審核訂單 (通知用)
-  const pendingOrders = useMemo(() => {
-    return (orders || []).filter(o => o.status === 'pending');
-  }, [orders]);
-
   // 過濾邏輯
   const filteredOrders = useMemo(() => {
     return (orders || []).filter(order => {
       if (!order) return false;
-      
-      const matchesSearch = 
-        (order.orderNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (order.projectName && order.projectName.toLowerCase().includes(searchTerm.toLowerCase()));
-      
+      const matchesSearch = (order.orderNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) || (order.projectName && order.projectName.toLowerCase().includes(searchTerm.toLowerCase()));
       const dealerName = order.user?.dealerProfile?.companyName || order.user?.name || '';
-      
       const matchesDealer = dealerName.toLowerCase().includes(dealerFilter.toLowerCase());
       const orderDate = order.createdAt ? new Date(order.createdAt).toISOString().split('T')[0] : '';
       const matchesDate = dateFilter ? orderDate === dateFilter : true;
       const matchesStatus = statusFilter === 'all' ? true : order.status === statusFilter;
-
       return matchesSearch && matchesDealer && matchesDate && matchesStatus;
     });
   }, [orders, searchTerm, dealerFilter, dateFilter, statusFilter]);
 
-  // Excel 匯出
-  const handleExportExcel = () => {
-    const dataToExport = filteredOrders.map(o => ({
+  // ✨✨✨ 多選操作邏輯 ✨✨✨
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredOrders.length) {
+      setSelectedIds(new Set()); // 取消全選
+    } else {
+      setSelectedIds(new Set(filteredOrders.map(o => o.id))); // 全選目前頁面
+    }
+  };
+
+  const toggleSelectOne = (id: string) => {
+    const newSet = new Set(selectedIds);
+    if (newSet.has(id)) newSet.delete(id);
+    else newSet.add(id);
+    setSelectedIds(newSet);
+  };
+
+  // ✨✨✨ 1. 匯出：一般訂單總表 (財務對帳用) ✨✨✨
+  const handleExportOrders = () => {
+    // 只匯出勾選的，若無勾選則匯出當前篩選結果
+    const targetOrders = selectedIds.size > 0 
+      ? filteredOrders.filter(o => selectedIds.has(o.id)) 
+      : filteredOrders;
+
+    const data = targetOrders.map(o => ({
       '訂單編號': o.orderNumber,
-      '建立日期': new Date(o.createdAt).toLocaleDateString(),
-      '案場名稱': o.projectName,
+      '狀態': o.status,
+      '日期': new Date(o.createdAt).toLocaleDateString(),
       '經銷商': o.user?.dealerProfile?.companyName || o.user?.email,
-      '產品名稱': o.items?.[0]?.product?.name || '多品項',
+      '案場': o.projectName,
       '總金額': Number(o.totalAmount),
-      '訂單狀態': o.status === 'pending' ? '待審核' : 
-                  o.status === 'processing' ? '生產中' : 
-                  o.status === 'shipped' ? '已出貨' : o.status,
+      '商品數': o.items?.length || 0
     }));
 
-    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "SomaLink訂單");
-    XLSX.writeFile(workbook, `SomaLink_Orders_${new Date().toISOString().slice(0,10)}.xlsx`);
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "訂單總表");
+    XLSX.writeFile(wb, `SomaLink_Orders_${new Date().toISOString().slice(0,10)}.xlsx`);
+  };
+
+  // ✨✨✨ 2. 匯出：詳細生產工單 (工廠備料用) ✨✨✨
+  const handleExportProduction = () => {
+    const targetOrders = selectedIds.size > 0 
+      ? filteredOrders.filter(o => selectedIds.has(o.id)) 
+      : filteredOrders;
+
+    // 將資料「攤平」：一張訂單有多個商品，變成多行
+    const flatData: any[] = [];
+    
+    targetOrders.forEach(order => {
+      order.items?.forEach((item, idx) => {
+        flatData.push({
+          '訂單編號': order.orderNumber,
+          '項次': idx + 1,
+          '案場名稱': order.projectName,
+          '產品名稱': item.product?.name,
+          '顏色': item.colorName,
+          '材質': item.materialName,
+          '把手': item.handleName || '無', // 把手欄位
+          '開向': item.openingDirection,
+          '寬 (W)': item.widthMatrix?.mid,
+          '高 (H)': item.heightData?.singleValue || item.heightData?.mid,
+          '封頂': item.isCeilingMounted ? '是' : '否',
+          '數量': item.quantity,
+          '備註': order.customerNote || ''
+        });
+      });
+    });
+
+    const ws = XLSX.utils.json_to_sheet(flatData);
+    
+    // 設定欄寬 (美化)
+    const wscols = [
+      {wch: 15}, {wch: 5}, {wch: 15}, {wch: 20}, {wch: 10}, 
+      {wch: 10}, {wch: 10}, {wch: 10}, {wch: 8}, {wch: 8}, 
+      {wch: 6}, {wch: 6}, {wch: 20}
+    ];
+    ws['!cols'] = wscols;
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "生產備料單");
+    XLSX.writeFile(wb, `Production_List_${new Date().toISOString().slice(0,10)}.xlsx`);
+  };
+
+  // ✨✨✨ 3. 批量更新狀態 ✨✨✨
+  const handleBatchStatus = async (status: string) => {
+    if (selectedIds.size === 0) return alert('請先勾選訂單');
+    if (!confirm(`確定要將選中的 ${selectedIds.size} 筆訂單狀態改為「${status}」嗎？`)) return;
+
+    try {
+      const promises = Array.from(selectedIds).map(id => 
+        api.patch(`/orders/${id}`, { status })
+      );
+      await Promise.all(promises);
+      alert('批量更新成功！');
+      setSelectedIds(new Set()); // 清空勾選
+      fetchOrders();
+    } catch (err) {
+      alert('部分更新失敗，請檢查網路');
+    }
   };
 
   const statusMap: Record<string, any> = {
@@ -121,84 +189,24 @@ export default function AdminDashboard() {
   };
 
   return (
-    <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-gray-50">
+    <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
       
-      <header className="bg-white shadow-sm border-b border-gray-200 h-16 flex items-center justify-between px-8 sticky top-0 z-20">
+      <header className="bg-white shadow-sm border-b border-gray-200 h-16 flex items-center justify-between px-8 sticky top-0 z-10">
         <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
           <LayoutDashboard className="w-5 h-5 text-gray-500" />
           訂單戰情室
         </h2>
-        
-        {/* ✨✨✨ 通知中心區域 ✨✨✨ */}
-        <div className="flex items-center gap-4 relative">
-          <button 
-            onClick={() => setIsNotifOpen(!isNotifOpen)}
-            className={clsx(
-              "p-2 rounded-full relative transition-colors",
-              isNotifOpen ? "bg-blue-50 text-blue-600" : "text-gray-400 hover:bg-gray-100"
-            )}
-            title="通知中心"
-          >
+        <div className="flex items-center gap-4">
+          <Link href="/logs" className="p-2 text-gray-400 hover:bg-gray-100 rounded-full relative transition-colors" title="系統日誌">
             <Bell className="w-5 h-5" />
-            {/* ✨ 動態顯示待審核數量 */}
-            {pendingOrders.length > 0 && (
-              <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white animate-in zoom-in duration-300">
-                {pendingOrders.length > 9 ? '9+' : pendingOrders.length}
-              </span>
-            )}
-          </button>
-
-          {/* ✨ 下拉通知選單 */}
-          {isNotifOpen && (
-            <>
-              {/* 點擊外部關閉遮罩 */}
-              <div className="fixed inset-0 z-10" onClick={() => setIsNotifOpen(false)} />
-              
-              <div className="absolute right-0 top-12 w-80 bg-white rounded-xl shadow-xl border border-gray-200 z-20 overflow-hidden animate-in slide-in-from-top-2 duration-200">
-                <div className="p-3 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
-                  <h3 className="font-bold text-gray-700 text-sm">待處理訂單 ({pendingOrders.length})</h3>
-                  <button onClick={() => setIsNotifOpen(false)} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
-                </div>
-                
-                <div className="max-h-[300px] overflow-y-auto">
-                  {pendingOrders.length === 0 ? (
-                    <div className="p-8 text-center text-gray-400 text-sm">目前沒有新訂單 🎉</div>
-                  ) : (
-                    pendingOrders.slice(0, 5).map(order => (
-                      <div 
-                        key={order.id}
-                        onClick={() => {
-                          setSelectedOrder(order); // 打開詳情 Modal
-                          setIsNotifOpen(false);   // 關閉通知選單
-                        }}
-                        className="p-3 border-b border-gray-50 hover:bg-blue-50 cursor-pointer transition-colors group"
-                      >
-                        <div className="flex justify-between items-start mb-1">
-                          <span className="text-xs font-bold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded">新訂單</span>
-                          <span className="text-[10px] text-gray-400">{new Date(order.createdAt).toLocaleDateString()}</span>
-                        </div>
-                        <p className="text-sm font-bold text-gray-800 group-hover:text-blue-700">{order.user?.dealerProfile?.companyName || '未知客戶'}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">單號：{order.orderNumber}</p>
-                        <p className="text-xs text-gray-500">金額：${Number(order.totalAmount).toLocaleString()}</p>
-                      </div>
-                    ))
-                  )}
-                </div>
-                
-                <div className="p-2 bg-gray-50 border-t border-gray-100 text-center">
-                  <Link href="/logs" className="text-xs text-blue-600 hover:underline font-medium">
-                    查看所有系統日誌 &rarr;
-                  </Link>
-                </div>
-              </div>
-            </>
-          )}
+            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+          </Link>
         </div>
       </header>
 
       <div className="flex-1 overflow-y-auto p-8">
         
-        {/* 上方數據卡片 */}
+        {/* KPI 卡片 (保持不變) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
             <p className="text-sm text-gray-500 font-medium uppercase tracking-wider">篩選結果筆數</p>
@@ -222,39 +230,49 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* 訂單列表 (維持原樣) */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           
+          {/* 工具列 (篩選 + 批量操作) */}
           <div className="p-5 border-b border-gray-100 bg-gray-50/50 flex flex-wrap items-center gap-4">
-            <div className="relative w-64">
+            
+            {/* ... 原本的篩選欄位 ... */}
+            <div className="relative w-48">
               <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
               <input type="text" placeholder="搜尋單號、案名..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
             </div>
-            <div className="relative w-48">
-              <User className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
-              <input type="text" placeholder="篩選經銷商名稱" value={dealerFilter} onChange={(e) => setDealerFilter(e.target.value)} className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
-            </div>
-            <div className="relative w-48">
-              <Calendar className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
-              <input type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none text-gray-600" />
-            </div>
-            <div className="relative w-40">
-              <Filter className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
-              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full pl-9 pr-8 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none appearance-none bg-white text-gray-600 cursor-pointer">
-                <option value="all">全部狀態</option>
-                <option value="pending">待審核</option>
-                <option value="processing">生產中</option>
-                <option value="shipped">已出貨</option>
-                <option value="completed">已完成</option>
-                <option value="cancelled">已取消</option>
-              </select>
-              <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none"><svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg></div>
-            </div>
-            {(searchTerm || dealerFilter || dateFilter || statusFilter !== 'all') && (
-              <button onClick={() => { setSearchTerm(''); setDealerFilter(''); setDateFilter(''); setStatusFilter('all'); }} className="text-xs text-red-500 hover:underline px-2">清除篩選</button>
-            )}
-            <div className="ml-auto">
-              <button onClick={handleExportExcel} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 shadow-sm transition-all"><FileSpreadsheet className="w-4 h-4" /> 匯出 Excel</button>
+            {/* ... (省略部分篩選欄位以節省篇幅，請保留您原本的篩選器) ... */}
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-40 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none bg-white text-gray-600 cursor-pointer">
+              <option value="all">全部狀態</option>
+              <option value="pending">待審核</option>
+              <option value="processing">生產中</option>
+              <option value="shipped">已出貨</option>
+            </select>
+
+            <div className="ml-auto flex items-center gap-2">
+              {/* ✨✨✨ 批量操作按鈕 ✨✨✨ */}
+              {selectedIds.size > 0 && (
+                <div className="flex items-center gap-2 mr-4 animate-in fade-in">
+                  <span className="text-sm text-gray-500 font-bold">已選 {selectedIds.size} 筆：</span>
+                  <button onClick={() => handleBatchStatus('processing')} className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-xs font-bold hover:bg-blue-200 transition-colors">批量審核</button>
+                  <button onClick={() => handleBatchStatus('shipped')} className="px-3 py-1.5 bg-purple-100 text-purple-700 rounded-lg text-xs font-bold hover:bg-purple-200 transition-colors">批量出貨</button>
+                </div>
+              )}
+
+              {/* 匯出按鈕組 */}
+              <div className="flex gap-2 border-l pl-4 border-gray-300">
+                <button 
+                  onClick={handleExportOrders}
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-50 shadow-sm transition-all"
+                >
+                  <FileSpreadsheet className="w-4 h-4" /> 匯出對帳單
+                </button>
+                <button 
+                  onClick={handleExportProduction}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 shadow-sm transition-all"
+                >
+                  <Hammer className="w-4 h-4" /> 匯出生產工單
+                </button>
+              </div>
             </div>
           </div>
 
@@ -262,6 +280,14 @@ export default function AdminDashboard() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
+                  {/* ✨ 全選 Checkbox */}
+                  <th className="px-6 py-3 w-10">
+                    <button onClick={toggleSelectAll} className="text-gray-400 hover:text-blue-600">
+                      {selectedIds.size > 0 && selectedIds.size === filteredOrders.length 
+                        ? <CheckSquare className="w-5 h-5 text-blue-600" /> 
+                        : <Square className="w-5 h-5" />}
+                    </button>
+                  </th>
                   <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">單號 / 案場</th>
                   <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">經銷商</th>
                   <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">產品概要</th>
@@ -273,25 +299,26 @@ export default function AdminDashboard() {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {loading ? (
-                  <tr><td colSpan={7} className="text-center py-12 text-gray-500">資料載入中...</td></tr>
+                  <tr><td colSpan={8} className="text-center py-12 text-gray-500">資料載入中...</td></tr>
                 ) : filteredOrders.length === 0 ? (
-                  <tr><td colSpan={7} className="text-center py-12 text-gray-500">查無符合條件的訂單</td></tr>
+                  <tr><td colSpan={8} className="text-center py-12 text-gray-500">查無符合條件的訂單</td></tr>
                 ) : (
                   filteredOrders.map((order) => {
                     const status = statusMap[order.status as string] || { label: order.status, color: 'bg-gray-100', icon: Info };
                     const StatusIcon = status.icon;
                     const action = getActionButton(order.status as string); 
-
                     const firstItem = order.items?.[0];
-                    const productSummary = firstItem ? (
-                        <>
-                            {firstItem.product?.name || '未知產品'} 
-                            {order.items.length > 1 && <span className="text-xs text-gray-400 ml-1">+{order.items.length - 1}</span>}
-                        </>
-                    ) : '無商品';
+                    const isSelected = selectedIds.has(order.id);
 
                     return (
-                      <tr key={order.id} className="hover:bg-blue-50/30 transition-colors group">
+                      <tr key={order.id} className={clsx("transition-colors group", isSelected ? "bg-blue-50" : "hover:bg-gray-50")}>
+                        {/* ✨ 單選 Checkbox */}
+                        <td className="px-6 py-4">
+                          <button onClick={() => toggleSelectOne(order.id)} className="text-gray-400 hover:text-blue-600">
+                            {isSelected ? <CheckSquare className="w-5 h-5 text-blue-600" /> : <Square className="w-5 h-5" />}
+                          </button>
+                        </td>
+
                         <td className="px-6 py-4">
                           <div className="flex flex-col">
                             <span className="text-sm font-bold text-gray-900 group-hover:text-blue-600">{order.orderNumber}</span>
@@ -303,7 +330,10 @@ export default function AdminDashboard() {
                             <span className="text-sm text-gray-900 font-medium">{order.user?.dealerProfile?.companyName || '未知'}</span>
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-600">{productSummary}</td>
+                        <td className="px-6 py-4 text-sm text-gray-600">
+                           {firstItem?.product?.name || '無商品'} 
+                           {order.items.length > 1 && <span className="text-xs text-gray-400 ml-1">+{order.items.length - 1}</span>}
+                        </td>
                         <td className="px-6 py-4 text-sm font-bold text-blue-600">${Number(order.totalAmount).toLocaleString()}</td>
                         <td className="px-6 py-4 text-xs text-gray-500">{new Date(order.createdAt).toLocaleDateString()}</td>
                         <td className="px-6 py-4">

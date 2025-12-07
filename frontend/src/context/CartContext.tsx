@@ -54,10 +54,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
     const authenticated = checkAuth();
 
     if (authenticated) {
-      // A. 已登入：從伺服器抓取
+      // A. 已登入：從伺服器抓取 (Server-side Cart)
       fetchServerCart();
     } else {
-      // B. 未登入：從 LocalStorage 抓取
+      // B. 未登入：從 LocalStorage 抓取 (Client-side Cart)
       const saved = localStorage.getItem('soma_cart');
       if (saved) {
         try {
@@ -69,7 +69,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // 僅在未登入時，將 items 變化同步回 LocalStorage
+  // 僅在「未登入」時，將 items 變化同步回 LocalStorage
+  // (已登入時，資料是直接寫入後端 DB，不需要存 LocalStorage)
   useEffect(() => {
     if (!isLoggedIn) {
       localStorage.setItem('soma_cart', JSON.stringify(items));
@@ -80,16 +81,20 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const fetchServerCart = async () => {
     try {
       const serverItems = await api.cart.list();
+      
       // 將後端資料格式轉換為前端 CartItem 格式
+      // 注意：後端回傳的結構可能與前端不完全一樣，這裡要做 Mapping
       const formattedItems: CartItem[] = serverItems.map((item: any) => ({
         internalId: item.id, // 使用後端資料庫 ID
         productId: item.product?.id,
         productName: item.product?.name || '未知商品',
+        
         // 若後端沒存單價，可用總價反推或依賴快照
         unitPrice: Number(item.subtotal) / item.quantity, 
         quantity: item.quantity,
         subtotal: Number(item.subtotal),
         
+        // 規格還原
         serviceType: item.serviceType,
         widthMatrix: item.widthMatrix,
         heightData: item.heightData,
@@ -105,13 +110,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
       setItems(formattedItems);
     } catch (error) {
       console.error('無法同步伺服器購物車', error);
+      // 如果 Token 過期導致失敗，可以選擇不處理，或者清空購物車
     }
   };
 
   // --- 動作：加入購物車 ---
   const addToCart = async (newItem: CartItem) => {
     if (isLoggedIn) {
-      // 已登入：呼叫 API
+      // A. 已登入：呼叫 API 寫入資料庫
       try {
         await api.cart.add({
           // 傳送符合後端 DTO 的資料
@@ -130,14 +136,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
           hasThreshold: newItem.hasThreshold,
           priceSnapshot: newItem.priceSnapshot
         });
-        // 加入後重新抓取，確保資料一致
+        // 加入後重新抓取，確保資料與後端一致
         await fetchServerCart();
       } catch (err) {
         console.error(err);
         alert('加入購物車失敗 (伺服器錯誤)，請稍後再試');
       }
     } else {
-      // 未登入：操作本地狀態
+      // B. 未登入：操作本地狀態
       setItems((prev) => [...prev, newItem]);
     }
   };
@@ -145,9 +151,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
   // --- 動作：移除項目 ---
   const removeFromCart = async (internalId: string) => {
     if (isLoggedIn) {
+      // A. 已登入：呼叫 API 刪除
       try {
         await api.cart.remove(internalId);
-        // 樂觀更新 (先從 UI 移除)
+        // 樂觀更新 (Optimistic Update)：先從 UI 移除，體驗比較快
         setItems((prev) => prev.filter((item) => item.internalId !== internalId));
       } catch (err) {
         console.error(err);
@@ -155,6 +162,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         fetchServerCart(); // 失敗時回復狀態
       }
     } else {
+      // B. 未登入：操作本地狀態
       setItems((prev) => prev.filter((item) => item.internalId !== internalId));
     }
   };
@@ -162,6 +170,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   // --- 動作：清空購物車 ---
   const clearCart = async () => {
     if (isLoggedIn) {
+      // A. 已登入：呼叫 API 清空
       try {
         await api.cart.clear();
         setItems([]);
@@ -169,6 +178,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         console.error(err);
       }
     } else {
+      // B. 未登入：清空 LocalStorage
       setItems([]);
       localStorage.removeItem('soma_cart');
     }
