@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   eslint: {
-    // 忽略 ESLint 錯誤，讓 build 強制通過
+    // 忽略 ESLint 錯誤
     ignoreDuringBuilds: true,
   },
   typescript: {
@@ -9,9 +9,13 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   images: {
-    // 如果你有用到外部圖片 (例如 google user content)，記得保留原本的 domain 設定
-    // 如果沒有，這塊保持預設即可
-    domains: [], 
+    // 在這裡加入允許的外部圖片網域
+    // 根據你的報錯，通常是 Unsplash 的圖片
+    domains: [
+      'images.unsplash.com', 
+      'plus.unsplash.com',
+      'source.unsplash.com'
+    ],
   },
 };
 
