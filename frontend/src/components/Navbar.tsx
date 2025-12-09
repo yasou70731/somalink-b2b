@@ -81,7 +81,7 @@ export default function Navbar() {
               <div className="bg-blue-600 w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-blue-200 shadow-md">
                 S
               </div>
-              <span className="font-bold text-xl tracking-tight text-gray-900 hidden sm:block">SomaLink</span>
+              <span className="font-bold text-xl tracking-tight text-gray-900 hidden sm:block">松成有限公司</span>
             </Link>
 
             {/* 2. 中間 搜尋框 */}
