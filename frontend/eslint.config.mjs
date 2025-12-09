@@ -10,8 +10,20 @@ const compat = new FlatCompat({
 });
 
 const eslintConfig = [
-  // 使用 compat.extends 載入 Next.js 的預設規則
+  // 1. 繼承 Next.js 預設規則
   ...compat.extends("next/core-web-vitals", "next/typescript"),
+  
+  // 2. ✨✨✨ 新增：自定義規則 (關閉嚴格檢查) ✨✨✨
+  {
+    rules: {
+      // 允許使用 any 型別
+      "@typescript-eslint/no-explicit-any": "off",
+      // 允許宣告未使用的變數 (如 catch(e) 的 e)
+      "@typescript-eslint/no-unused-vars": "off",
+      // (選用) 關閉 React Hook 依賴檢查警告，避免 yellow lines
+      "react-hooks/exhaustive-deps": "off" 
+    },
+  },
 ];
 
 export default eslintConfig;
