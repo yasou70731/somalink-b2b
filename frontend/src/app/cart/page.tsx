@@ -3,21 +3,35 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-// ✨ 新增 Printer 圖示
-import { Trash2, ArrowRight, Loader2, ShoppingBag, AlertCircle, Hammer, Package, MessageSquare, MapPin, Building2, User, Phone, Copy, UploadCloud, FileText, X, Printer } from 'lucide-react';
+import Image from 'next/image'; // ✅ 引入 Next Image
+import { 
+  Trash2, ArrowRight, Loader2, ShoppingBag, AlertCircle, 
+  Hammer, Package, MessageSquare, MapPin, Building2, 
+  User, Phone, Copy, UploadCloud, FileText, X, Printer 
+} from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { api } from '@/lib/api';
+import type { CartItem } from '@/lib/api'; // ✅ 引入型別
 import Modal from '@/components/Modal'; 
 
 const CLOUDINARY_CLOUD_NAME = 'dnibj8za6'; 
 const CLOUDINARY_PRESET = 'yasou70731';  
+
+// 定義 User 型別 (簡單版)
+interface UserProfile {
+  dealerProfile?: {
+    address?: string;
+    contactPerson?: string;
+    phone?: string;
+  };
+}
 
 export default function CartPage() {
   const router = useRouter();
   const { items, removeFromCart, clearCart, cartTotal } = useCart();
   
   const [mounted, setMounted] = useState(false);
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
 
   const [modalConfig, setModalConfig] = useState({
@@ -39,7 +53,7 @@ export default function CartPage() {
     setMounted(true);
     const stored = localStorage.getItem('somalink_user') || sessionStorage.getItem('somalink_user');
     if (stored) {
-      try { setCurrentUser(JSON.parse(stored)); } catch(e) {}
+      try { setCurrentUser(JSON.parse(stored)); } catch { /* ignore error */ }
     }
   }, [router]);
 
@@ -107,11 +121,9 @@ export default function CartPage() {
     setAttachments(prev => prev.filter((_, i) => i !== index));
   };
 
-  // ✨✨✨ 新增：產生報價單邏輯 ✨✨✨
   const handlePrintQuotation = () => {
     if (!projectName.trim()) { showAlert('欄位未填', '請輸入案場名稱，以便顯示在報價單上', 'warning'); return; }
     
-    // 1. 打包目前購物車資料
     const quotationData = {
       projectName,
       shippingAddress,
@@ -122,10 +134,7 @@ export default function CartPage() {
       createdAt: new Date().toISOString()
     };
 
-    // 2. 存入 SessionStorage (暫存)
     sessionStorage.setItem('soma_quotation_draft', JSON.stringify(quotationData));
-
-    // 3. 開啟預覽頁
     window.open('/quotation/preview', '_blank');
   };
 
@@ -147,7 +156,8 @@ export default function CartPage() {
         customerNote,
         attachments,
         agreedToDisclaimer: agreed,
-        items: items.map(item => ({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        items: items.map((item: any) => ({
           productId: item.productId,
           serviceType: item.serviceType,
           widthMatrix: item.widthMatrix,
@@ -170,6 +180,7 @@ export default function CartPage() {
       
       showAlert('訂單已送出！', '您的訂單已成功建立，請至「歷史訂單」查看進度。', 'success', '/orders');
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error(error);
       if (error.response?.status === 401) {
@@ -221,21 +232,30 @@ export default function CartPage() {
           
           {/* 左側：商品列表 */}
           <div className="lg:col-span-2 space-y-6">
-            {items.map((item) => (
-              <div key={item.internalId} className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm flex flex-col sm:flex-row gap-6 relative group">
+            {/* ✅ 使用 CartItem 型別 */}
+            {items.map((item: CartItem) => (
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              <div key={(item as any).internalId} className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm flex flex-col sm:flex-row gap-6 relative group">
                 <button 
-                  onClick={() => removeFromCart(item.internalId)}
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  onClick={() => removeFromCart((item as any).internalId)}
                   className="absolute top-4 right-4 p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
                 >
                   <Trash2 className="w-5 h-5" />
                 </button>
-                <div className="w-24 h-24 bg-gray-100 rounded-xl shrink-0 overflow-hidden">
-                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                   <img src="https://images.unsplash.com/photo-1600607686527-6fb886090705?auto=format&fit=crop&q=80&w=200" alt={item.productName} className="w-full h-full object-cover" />
+                <div className="w-24 h-24 bg-gray-100 rounded-xl shrink-0 overflow-hidden relative">
+                   {/* ✅ 改用 Next Image */}
+                   <Image 
+                     src="https://images.unsplash.com/photo-1600607686527-6fb886090705?auto=format&fit=crop&q=80&w=200" 
+                     alt={item.product.name} 
+                     fill
+                     className="object-cover"
+                     sizes="96px"
+                   />
                 </div>
                 <div className="flex-1">
                   <div className="flex flex-wrap items-center gap-2 mb-1">
-                    <h3 className="text-lg font-bold text-gray-900">{item.productName}</h3>
+                    <h3 className="text-lg font-bold text-gray-900">{item.product.name}</h3>
                     {item.serviceType === 'material' ? (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-gray-100 text-gray-700 border border-gray-200"><Package className="w-3 h-3" /> 純材料</span>
                     ) : (
@@ -244,8 +264,10 @@ export default function CartPage() {
                   </div>
                   <div className="mt-2 space-y-1 text-sm text-gray-600">
                     <p><span className="font-medium">規格：</span>{item.colorName} / {item.materialName} / {item.handleName || '無把手'} / {item.openingDirection}</p>
-                    <p><span className="font-medium">尺寸：</span>W {item.widthMatrix.mid}cm x H {item.heightData.singleValue || item.heightData.mid || 'N/A'}cm {item.isCeilingMounted && <span className="ml-2 px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">封頂</span>}</p>
-                    {item.siteConditions?.floor && <p className="text-orange-600 text-xs flex items-center gap-1"><AlertCircle className="w-3 h-3" /> 地面水平誤差: {item.siteConditions.floor.diff}cm</p>}
+                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                    <p><span className="font-medium">尺寸：</span>W {item.widthMatrix.mid}cm x H {(item.heightData as any).singleValue || (item.heightData as any).mid || 'N/A'}cm {item.isCeilingMounted && <span className="ml-2 px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">封頂</span>}</p>
+                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                    {(item.siteConditions as any)?.floor && <p className="text-orange-600 text-xs flex items-center gap-1"><AlertCircle className="w-3 h-3" /> 地面水平誤差: {(item.siteConditions as any).floor.diff}cm</p>}
                   </div>
                   <div className="mt-4 flex items-center justify-between">
                     <div className="flex items-baseline gap-2">
@@ -299,10 +321,9 @@ export default function CartPage() {
                 <div className="flex flex-wrap gap-2 mb-2">
                   {attachments.map((url, index) => (
                     <div key={index} className="relative group">
-                      <div className="w-12 h-12 bg-gray-100 rounded-lg border border-gray-200 flex items-center justify-center overflow-hidden">
+                      <div className="w-12 h-12 bg-gray-100 rounded-lg border border-gray-200 flex items-center justify-center overflow-hidden relative">
                         {url.match(/\.(jpeg|jpg|gif|png)$/i) ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={url} alt="attachment" className="w-full h-full object-cover" />
+                          <Image src={url} alt="attachment" fill className="object-cover" sizes="48px" />
                         ) : (
                           <FileText className="w-6 h-6 text-gray-400" />
                         )}
@@ -328,7 +349,6 @@ export default function CartPage() {
                 <span className="text-sm text-gray-600 leading-relaxed">我已確認上述規格無誤，並同意服務條款。</span>
               </label>
 
-              {/* ✨✨✨ 新增按鈕區域 (包含報價單下載) ✨✨✨ */}
               <div className="space-y-3">
                 <button 
                   onClick={handlePrintQuotation}

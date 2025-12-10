@@ -1,37 +1,47 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react'; // ✨ 1. 補上 useMemo
 import Link from "next/link";
-import Image from 'next/image'; // ✨ 1. 引入 Next.js Image 元件
+import Image from 'next/image';
 import { ArrowRight } from "lucide-react";
 
-export default function HeroBlock({ data }: { data: any }) {
+// ✨ 2. 定義資料介面，解決 'any' 報錯
+interface HeroData {
+  images?: string[];
+  title?: string;
+  subtitle?: string;
+}
+
+export default function HeroBlock({ data }: { data: HeroData }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const images = data.images || [];
+
+  // ✨ 3. 使用 useMemo 確保陣列參考穩定，消除依賴警告
+  const images = useMemo(() => data.images || [], [data.images]);
 
   useEffect(() => {
+    // 如果圖片少於 2 張，就不需要輪播
     if (images.length <= 1) return;
+
     const timer = setInterval(() => {
       setCurrentImageIndex((prev) => (prev + 1) % images.length);
     }, 5000);
+
     return () => clearInterval(timer);
-  }, [images]);
+  }, [images]); // 現在 images 是穩定的，這裡就不會報錯了
 
   return (
     <div className="relative h-[85vh] w-full overflow-hidden bg-gray-900">
       {images.map((src: string, index: number) => (
-        // ✨ 2. 使用 div 包裹 Image 處理淡入淡出 (transition-opacity)
         <div 
           key={index} 
           className={`absolute inset-0 w-full h-full transition-opacity duration-1000 ${index === currentImageIndex ? 'opacity-100' : 'opacity-0'}`}
         >
-          {/* ✨ 3. 使用 <Image /> 取代 <img> */}
           <Image
             src={src} 
             alt="Hero"
-            fill // 自動填滿父層 div
-            className="object-cover" // 保持比例裁切
-            priority={index === 0} // 第一張圖優先載入 (提升效能分數)
-            sizes="100vw" // 告訴瀏覽器這張圖佔滿視窗寬度
+            fill 
+            className="object-cover" 
+            priority={index === 0} 
+            sizes="100vw" 
           />
         </div>
       ))}

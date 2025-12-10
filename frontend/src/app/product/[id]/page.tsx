@@ -3,19 +3,55 @@
 import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image'; // ✅ 1. 引入 Next Image
 import { Ruler, Loader2, Hammer, Package, ArrowLeft, GripHorizontal, CheckCircle, BadgePercent } from 'lucide-react';
 import clsx from 'clsx';
 import MeasurementModal, { MeasurementData } from '@/components/MeasurementModal';
 import { useCart, CartItem } from '@/context/CartContext';
 import { api } from '@/lib/api';
 
+// ✅ 2. 定義詳細的資料型別，解決大量的 any
+interface ProductOption {
+  name: string;
+  priceSurcharge?: number;
+  colorCode?: string;
+}
+
+interface ProductDetail {
+  id: string;
+  name: string;
+  series?: string;
+  sku?: string;
+  basePrice: number;
+  assemblyFee?: number;
+  discountA?: number;
+  discountB?: number;
+  images: string[];
+  imageUrl?: string; // 相容舊資料
+  colors?: ProductOption[];
+  materials?: ProductOption[];
+  handles?: ProductOption[];
+  openingOptions?: string[];
+  requiresMeasurement?: boolean;
+  pricePerUnitWidth?: number;
+  pricePerUnitHeight?: number;
+  standardWidth?: number;
+  standardHeight?: number;
+}
+
+interface SystemRules {
+  discount_level_A?: number;
+  discount_level_B?: number;
+}
+
 export default function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
   const { addToCart } = useCart();
 
-  const [product, setProduct] = useState<any>(null);
-  const [systemRules, setSystemRules] = useState<any>(null); 
+  // ✅ 3. 使用定義好的型別
+  const [product, setProduct] = useState<ProductDetail | null>(null);
+  const [systemRules, setSystemRules] = useState<SystemRules | null>(null); 
   const [userLevel, setUserLevel] = useState<string>('C');   
   
   const [loading, setLoading] = useState(true);
@@ -39,10 +75,9 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
 
   // 1. 載入資料 (含權限檢查)
   useEffect(() => {
-    // ✨✨✨ 檢查是否登入 (防止直接輸入網址進入) ✨✨✨
+    // 檢查是否登入
     const token = localStorage.getItem('somalink_token') || sessionStorage.getItem('somalink_token');
     if (!token) {
-      // 未登入直接導回登入頁
       router.replace('/login');
       return;
     }
@@ -51,8 +86,9 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
     const fetchData = async () => {
       try {
         // A. 抓產品
-        const prodRes = await api.get(`/products/${id}`);
-        const prodData = prodRes.data || prodRes; 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const prodRes: any = await api.get(`/products/${id}`);
+        const prodData: ProductDetail = prodRes.data || prodRes; 
         
         // 圖片防呆處理
         if (!prodData.images || !Array.isArray(prodData.images) || prodData.images.length === 0) {
@@ -61,17 +97,19 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
         }
         setProduct(prodData);
         
-        // 設定預設選項 (防呆：確認陣列存在才取值)
-        if (Array.isArray(prodData.colors) && prodData.colors.length > 0) setSelectedColor(prodData.colors[0].name);
-        if (Array.isArray(prodData.materials) && prodData.materials.length > 0) setSelectedMaterial(prodData.materials[0].name);
-        if (Array.isArray(prodData.handles) && prodData.handles.length > 0) setSelectedHandle(prodData.handles[0].name);
-        if (Array.isArray(prodData.openingOptions) && prodData.openingOptions.length > 0) setOpeningDirection(prodData.openingOptions[0]);
+        // 設定預設選項
+        if (prodData.colors && prodData.colors.length > 0) setSelectedColor(prodData.colors[0].name);
+        if (prodData.materials && prodData.materials.length > 0) setSelectedMaterial(prodData.materials[0].name);
+        if (prodData.handles && prodData.handles.length > 0) setSelectedHandle(prodData.handles[0].name);
+        if (prodData.openingOptions && prodData.openingOptions.length > 0) setOpeningDirection(prodData.openingOptions[0]);
 
-        // B. 抓系統規則 (為了全域折數)
+        // B. 抓系統規則
         try {
-          const ruleRes = await api.get('/site-config/rules');
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const ruleRes: any = await api.get('/site-config/rules');
           if (ruleRes?.settings) setSystemRules(ruleRes.settings);
-        } catch (e) { console.error('無法讀取系統規則 (使用預設值)', e); }
+        // ✅ 4. 移除未使用的 e
+        } catch { console.error('無法讀取系統規則 (使用預設值)'); }
 
         // C. 抓會員等級
         const storedUser = localStorage.getItem('somalink_user') || sessionStorage.getItem('somalink_user');
@@ -79,7 +117,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
           try {
             const u = JSON.parse(storedUser);
             if (u.dealerProfile?.level) setUserLevel(u.dealerProfile.level);
-          } catch (e) { console.error('解析會員資料失敗'); }
+          } catch { console.error('解析會員資料失敗'); }
         }
 
       } catch (err) {
@@ -91,40 +129,35 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
     fetchData();
   }, [id, router]);
 
-  // 如果正在檢查權限或載入中，顯示 Loading
   if (authChecking || loading) return <div className="min-h-screen flex justify-center items-center"><Loader2 className="animate-spin text-blue-600" /></div>;
   if (!product) return <div className="min-h-screen flex justify-center items-center">找不到產品</div>;
 
-  // ✨✨✨ 2. 計算折數與價格 (優先權邏輯) ✨✨✨
-  
-  let discountMultiplier = 1.0; // 預設原價
-  // 確保數值型別
+  // 2. 計算折數與價格
+  let discountMultiplier = 1.0; 
   const productDiscountA = product.discountA != null ? Number(product.discountA) : null;
   const productDiscountB = product.discountB != null ? Number(product.discountB) : null;
   const systemDiscountA = systemRules?.discount_level_A ? Number(systemRules.discount_level_A) : 1.0;
   const systemDiscountB = systemRules?.discount_level_B ? Number(systemRules.discount_level_B) : 1.0;
 
   if (userLevel === 'A') {
-    // 優先權：產品個別設定 > 系統全域設定 > 原價
     discountMultiplier = productDiscountA ?? systemDiscountA;
   } else if (userLevel === 'B') {
     discountMultiplier = productDiscountB ?? systemDiscountB;
   }
 
-  // 基礎配置加總 (安全版：加上 || 0 避免 NaN)
-  const currentColorObj = product.colors?.find((c: any) => c.name === selectedColor);
-  const currentMaterialObj = product.materials?.find((m: any) => m.name === selectedMaterial);
-  const currentHandleObj = product.handles?.find((h: any) => h.name === selectedHandle);
+  // ✅ 5. 因為有型別，這裡不需要再寫 (c: any) 了
+  const currentColorObj = product.colors?.find(c => c.name === selectedColor);
+  const currentMaterialObj = product.materials?.find(m => m.name === selectedMaterial);
+  const currentHandleObj = product.handles?.find(h => h.name === selectedHandle);
 
   let rawUnitPrice = Number(product.basePrice || 0) + 
                      (Number(currentColorObj?.priceSurcharge) || 0) + 
                      (Number(currentMaterialObj?.priceSurcharge) || 0) +
                      (Number(currentHandleObj?.priceSurcharge) || 0);
   
-  const assemblyFee = Number(product.assemblyFee) || 3000; // 預設 3000
+  const assemblyFee = Number(product.assemblyFee) || 3000;
   if (serviceType === 'assembled') rawUnitPrice += assemblyFee;
 
-  // 最終單價 (打折後)
   const finalUnitPrice = Math.round(rawUnitPrice * discountMultiplier);
 
   // 3. 加入購物車邏輯
@@ -132,7 +165,6 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
     setIsSubmitting(true);
 
     let sizeSurcharge = 0;
-    // 安全讀取尺寸加價參數
     const pricePerW = Number(product.pricePerUnitWidth) || 0;
     const pricePerH = Number(product.pricePerUnitHeight) || 0;
     const stdW = Number(product.standardWidth) || 90;
@@ -148,17 +180,16 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
       if (maxH > stdH) sizeSurcharge += Math.ceil((maxH - stdH) / 10) * pricePerH;
     }
 
-    // 尺寸加價也打折
     const finalSizeSurcharge = Math.round(sizeSurcharge * discountMultiplier);
-    
     const totalUnitPrice = finalUnitPrice + finalSizeSurcharge;
     const totalSubtotal = totalUnitPrice * quantity;
 
     const newItem: CartItem = {
-      internalId: crypto.randomUUID(),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      internalId: crypto.randomUUID() as any, // 暫時處理，視後端需求
       productId: product.id,
       productName: product.name,
-      unitPrice: totalUnitPrice, // 使用打折後的最終單價
+      unitPrice: totalUnitPrice,
       quantity: quantity,
       subtotal: totalSubtotal,
       serviceType: serviceType, 
@@ -208,15 +239,28 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
           {/* 左側圖片畫廊 */}
           <div className="space-y-4">
             <div className="aspect-square bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm relative group">
-               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={product.images[activeImageIndex]} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt={product.name} />
+              {/* ✅ 6. 改用 Next Image */}
+              <Image 
+                src={product.images[activeImageIndex]} 
+                alt={product.name}
+                fill
+                className="object-cover transition-transform duration-700 group-hover:scale-105"
+                sizes="(max-width: 768px) 100vw, 50vw"
+                priority
+              />
             </div>
             {product.images.length > 1 && (
               <div className="flex gap-3 overflow-x-auto pb-2 snap-x">
                 {product.images.map((img: string, idx: number) => (
                   <button key={idx} onClick={() => setActiveImageIndex(idx)} className={clsx("relative w-20 h-20 rounded-lg overflow-hidden border-2 shrink-0 transition-all snap-start", activeImageIndex === idx ? "border-blue-600 ring-2 ring-blue-100" : "border-transparent hover:border-gray-300")}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={img} alt={`Thumbnail ${idx}`} className="w-full h-full object-cover" />
+                    {/* ✅ 改用 Next Image */}
+                    <Image 
+                      src={img} 
+                      alt={`Thumbnail ${idx}`} 
+                      fill
+                      className="object-cover"
+                      sizes="80px"
+                    />
                   </button>
                 ))}
               </div>
@@ -266,7 +310,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
               <div>
                 <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center justify-between"><span>鋁框顏色</span><span className="text-xs text-gray-500 font-normal">已選：{selectedColor}</span></h3>
                 <div className="grid grid-cols-3 gap-3">
-                  {product.colors.map((color: any, idx: number) => (
+                  {product.colors.map((color, idx) => (
                     <button key={idx} onClick={() => setSelectedColor(color.name)} className={clsx("relative flex items-center gap-3 p-3 rounded-xl border-2 transition-all", selectedColor === color.name ? "border-blue-600 bg-blue-50 ring-1 ring-blue-600" : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50")}><span className="w-6 h-6 rounded-full border border-gray-300 shadow-sm" style={{ backgroundColor: color.colorCode || '#000' }} /><span className={clsx("text-sm font-medium", selectedColor === color.name ? "text-blue-900" : "text-gray-700")}>{color.name}</span>{Number(color.priceSurcharge) > 0 && <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full shadow-sm font-bold">+${color.priceSurcharge}</span>}</button>
                   ))}
                 </div>
@@ -278,7 +322,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
               <div>
                 <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center justify-between"><span>玻璃/板材</span><span className="text-xs text-gray-500 font-normal">已選：{selectedMaterial}</span></h3>
                 <div className="grid grid-cols-2 gap-3">
-                  {product.materials.map((mat: any, idx: number) => (
+                  {product.materials.map((mat, idx) => (
                     <button key={idx} onClick={() => setSelectedMaterial(mat.name)} className={clsx("relative p-3 rounded-xl border-2 transition-all text-left", selectedMaterial === mat.name ? "border-blue-600 bg-blue-50 ring-1 ring-blue-600" : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50")}><span className={clsx("text-sm font-medium block", selectedMaterial === mat.name ? "text-blue-900" : "text-gray-700")}>{mat.name}</span>{Number(mat.priceSurcharge) > 0 && <span className="text-xs text-red-500 font-medium block mt-1">+${mat.priceSurcharge}</span>}</button>
                   ))}
                 </div>
@@ -290,7 +334,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
               <div>
                 <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center justify-between"><span>把手配件</span><span className="text-xs text-gray-500 font-normal">已選：{selectedHandle}</span></h3>
                 <div className="grid grid-cols-2 gap-3">
-                  {product.handles.map((h: any, idx: number) => (
+                  {product.handles.map((h, idx) => (
                     <button key={idx} onClick={() => setSelectedHandle(h.name)} className={clsx("relative p-3 rounded-xl border-2 transition-all flex items-center gap-3", selectedHandle === h.name ? "border-blue-600 bg-blue-50 ring-1 ring-blue-600" : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50")}>
                       <GripHorizontal className={clsx("w-5 h-5", selectedHandle === h.name ? "text-blue-600" : "text-gray-400")} />
                       <span className={clsx("text-sm font-medium flex-1 text-left", selectedHandle === h.name ? "text-blue-900" : "text-gray-700")}>{h.name}</span>
@@ -306,7 +350,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
               <div>
                 <h3 className="text-sm font-bold text-gray-900 mb-3">開門方向</h3>
                 <div className="grid grid-cols-2 gap-3">
-                  {product.openingOptions.map((opt: string, idx: number) => (
+                  {product.openingOptions.map((opt, idx) => (
                     <button key={idx} onClick={() => setOpeningDirection(opt)} className={clsx("py-3 px-4 rounded-xl text-sm font-bold border-2 transition-all flex items-center justify-center", openingDirection === opt ? "border-blue-600 bg-blue-50 text-blue-900 ring-1 ring-blue-600" : "border-gray-200 bg-white hover:border-gray-300 text-gray-500")}>{opt}</button>
                   ))}
                 </div>

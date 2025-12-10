@@ -1,13 +1,37 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader2, Printer, MapPin, Phone, User, MessageSquare, FileText } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+// ✅ 1. 移除未使用的 MapPin, Phone, User, MessageSquare
+import { Loader2, Printer, FileText } from 'lucide-react';
+// ✅ 2. 移除未使用的 useRouter
+
+// ✅ 3. 定義報價單資料型別，取代 any
+interface QuotationItem {
+  productName: string;
+  colorName: string;
+  materialName: string;
+  serviceType: string;
+  handleName?: string;
+  widthMatrix?: { mid: number };
+  heightData?: { singleValue?: number; mid?: number };
+  isCeilingMounted?: boolean;
+  quantity: number;
+  unitPrice: number;
+  subtotal: number;
+}
+
+interface QuotationData {
+  projectName: string;
+  shippingAddress: string;
+  siteContactPerson: string;
+  siteContactPhone: string;
+  totalAmount: number;
+  items: QuotationItem[];
+}
 
 export default function QuotationPreviewPage() {
-  const router = useRouter();
-  const [cartData, setCartData] = useState<any>(null);
-  const [showPrice, setShowPrice] = useState(true);
+  // ✅ 4. 移除未使用的 router 和 showPrice
+  const [cartData, setCartData] = useState<QuotationData | null>(null);
 
   useEffect(() => {
     // 從 SessionStorage 讀取暫存的報價資料
@@ -16,7 +40,7 @@ export default function QuotationPreviewPage() {
       setCartData(JSON.parse(data));
     } else {
       alert('無報價資料，請從購物車重新操作');
-      window.close(); // 或 router.push('/cart');
+      window.close(); 
     }
   }, []);
 
@@ -68,12 +92,12 @@ export default function QuotationPreviewPage() {
           <h3 className="text-xs font-bold bg-gray-200 px-2 py-0.5 mb-2 inline-block rounded text-black print:border print:border-black">客戶資訊 (Customer)</h3>
           <div className="grid grid-cols-2 gap-4 text-sm text-black">
              <div>
-                <p><span className="font-bold w-16 inline-block">案場名稱：</span>{cartData.projectName}</p>
-                <p><span className="font-bold w-16 inline-block">送貨地址：</span>{cartData.shippingAddress}</p>
+               <p><span className="font-bold w-16 inline-block">案場名稱：</span>{cartData.projectName}</p>
+               <p><span className="font-bold w-16 inline-block">送貨地址：</span>{cartData.shippingAddress}</p>
              </div>
              <div>
-                <p><span className="font-bold w-16 inline-block">聯絡人：</span>{cartData.siteContactPerson}</p>
-                <p><span className="font-bold w-16 inline-block">電話：</span>{cartData.siteContactPhone}</p>
+               <p><span className="font-bold w-16 inline-block">聯絡人：</span>{cartData.siteContactPerson}</p>
+               <p><span className="font-bold w-16 inline-block">電話：</span>{cartData.siteContactPhone}</p>
              </div>
           </div>
         </div>
@@ -91,7 +115,8 @@ export default function QuotationPreviewPage() {
               </tr>
             </thead>
             <tbody className="text-sm text-black">
-              {cartData.items?.map((item: any, index: number) => (
+              {/* ✅ 5. 使用定義好的型別 QuotationItem */}
+              {cartData.items?.map((item: QuotationItem, index: number) => (
                 <tr key={index} className="border-b border-black break-inside-avoid">
                   <td className="py-2 px-2 align-top font-bold text-center">{index + 1}</td>
                   <td className="py-2 px-2 align-top">

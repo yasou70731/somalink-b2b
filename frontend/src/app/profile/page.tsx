@@ -3,16 +3,43 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
-import { Save, User, Building2, Phone, MapPin, Loader2, ArrowLeft } from 'lucide-react';
+// ✅ 1. 移除未使用的 Phone, MapPin
+import { Save, User, Building2, Loader2, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
+
+// ✅ 2. 定義表單資料型別
+interface ProfileFormData {
+  name: string;
+  email: string;
+  companyName: string;
+  taxId: string;
+  phone: string;
+  address: string;
+  password?: string;
+  confirmPassword?: string;
+}
+
+// ✅ 3. 定義 User 資料型別 (對應後端結構)
+interface UserProfile {
+  name: string;
+  email: string;
+  dealerProfile?: {
+    contactPerson?: string;
+    companyName?: string;
+    taxId?: string;
+    phone?: string;
+    address?: string;
+  };
+}
 
 export default function ProfilePage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { register, handleSubmit, setValue, reset } = useForm({
+  // ✅ 4. 移除未使用的 setValue
+  const { register, handleSubmit, reset } = useForm<ProfileFormData>({
     defaultValues: {
       name: '',
       email: '',
@@ -20,7 +47,7 @@ export default function ProfilePage() {
       taxId: '',
       phone: '',
       address: '',
-      password: '', // 選填：若填寫則修改密碼
+      password: '',
       confirmPassword: ''
     }
   });
@@ -29,7 +56,6 @@ export default function ProfilePage() {
     // 載入當前使用者資料
     const fetchProfile = async () => {
       try {
-        // ✨ 修正重點：同時檢查 LocalStorage 與 SessionStorage
         const storedUser = localStorage.getItem('somalink_user') || sessionStorage.getItem('somalink_user');
         
         if (!storedUser) {
@@ -37,16 +63,17 @@ export default function ProfilePage() {
           return;
         }
         
-        const user = JSON.parse(storedUser);
+        // ✅ 5. 強制轉型為 UserProfile，解決 implicit any
+        const user: UserProfile = JSON.parse(storedUser);
         
         // 將資料填入表單
         reset({
           name: user.dealerProfile?.contactPerson || user.name,
           email: user.email,
-          companyName: user.dealerProfile?.companyName,
-          taxId: user.dealerProfile?.taxId,
-          phone: user.dealerProfile?.phone,
-          address: user.dealerProfile?.address,
+          companyName: user.dealerProfile?.companyName || '',
+          taxId: user.dealerProfile?.taxId || '',
+          phone: user.dealerProfile?.phone || '',
+          address: user.dealerProfile?.address || '',
         });
       } catch (err) {
         console.error(err);
@@ -58,7 +85,8 @@ export default function ProfilePage() {
     fetchProfile();
   }, [router, reset]);
 
-  const onSubmit = async (data: any) => {
+  // ✅ 6. 使用 ProfileFormData 取代 any
+  const onSubmit = async (data: ProfileFormData) => {
     if (data.password && data.password !== data.confirmPassword) {
       alert('兩次密碼輸入不一致');
       return;
@@ -79,9 +107,10 @@ export default function ProfilePage() {
         }
       };
 
-      const updatedUser = await api.patch('/users/profile', payload);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const updatedUser: any = await api.patch('/users/profile', payload);
       
-      // ✨ 更新儲存空間 (需判斷原本存在哪裡，保持登入狀態一致)
+      // 更新儲存空間
       if (localStorage.getItem('somalink_user')) {
         localStorage.setItem('somalink_user', JSON.stringify(updatedUser));
       } else {

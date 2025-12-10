@@ -3,6 +3,9 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { api } from '@/lib/api';
 
+// ✅ 定義通用物件型別，取代 any
+type JsonObject = Record<string, unknown>;
+
 // 定義購物車項目的資料結構
 export interface CartItem {
   internalId: string; // 前端識別ID (本地端為 UUID，伺服器端為資料庫 ID)
@@ -12,9 +15,12 @@ export interface CartItem {
   
   serviceType: string;
   widthMatrix: { top: number; mid: number; bot: number };
-  heightData: any;
+  
+  // ✅ 修正：使用 JsonObject 替代 any
+  heightData: JsonObject;
   isCeilingMounted: boolean;
-  siteConditions?: any;
+  siteConditions?: JsonObject;
+  
   colorName: string;
   materialName: string;
   handleName: string;
@@ -23,7 +29,7 @@ export interface CartItem {
   
   quantity: number;
   subtotal: number;
-  priceSnapshot: any; 
+  priceSnapshot: JsonObject; 
 }
 
 interface CartContextType {
@@ -80,10 +86,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
   // --- 核心功能：從後端同步購物車 ---
   const fetchServerCart = async () => {
     try {
-      const serverItems = await api.cart.list();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const serverItems: any[] = await api.cart.list();
       
       // 將後端資料格式轉換為前端 CartItem 格式
       // 注意：後端回傳的結構可能與前端不完全一樣，這裡要做 Mapping
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const formattedItems: CartItem[] = serverItems.map((item: any) => ({
         internalId: item.id, // 使用後端資料庫 ID
         productId: item.product?.id,

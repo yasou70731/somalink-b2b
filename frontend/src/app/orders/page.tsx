@@ -1,46 +1,21 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-// ✨ 修正：確保這裡有導入 Link
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Package, Clock, Truck, CheckCircle, Trash2, Hammer, XCircle, RefreshCw, Loader2, Printer } from 'lucide-react';
-import { api } from '@/lib/api';
+import { api, Order } from '@/lib/api'; // ✅ 1. 從 api 匯入 Order 型別
 import Modal from '@/components/Modal';
 import { useCart, CartItem } from '@/context/CartContext';
 
-// 定義介面 (與 API 回傳一致)
-interface OrderItem {
-  productId: string; 
-  product: { 
-    id: string; 
-    name: string; 
-    basePrice?: number; 
-    assemblyFee?: number;
-  };
-  quantity: number;
-  serviceType: 'material' | 'assembled';
-  widthMatrix: any;
-  heightData: any;
-  isCeilingMounted: boolean;
-  siteConditions: any;
-  colorName: string;
-  materialName: string;
-  handleName: string;
-  openingDirection: string;
-  hasThreshold: boolean;
-  subtotal: number;
-  priceSnapshot: any;
-}
-
-interface Order {
-  id: string;
-  orderNumber: string;
-  status: 'pending' | 'processing' | 'shipped' | 'completed' | 'cancelled';
-  totalAmount: number;
-  createdAt: string;
-  projectName: string;
-  items: OrderItem[];
+// ✅ 2. 定義本地輔助型別，用來解析 PriceSnapshot (避免使用 any)
+interface PriceSnapshot {
+  basePrice?: number;
+  sizeSurcharge?: number;
+  colorSurcharge?: number;
+  materialSurcharge?: number;
+  handleSurcharge?: number;
+  assemblyFee?: number;
 }
 
 export default function OrdersPage() {
@@ -49,16 +24,13 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // 權限檢查狀態
   const [authChecking, setAuthChecking] = useState(true);
 
-  // 彈窗狀態
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, orderId: '' });
   const [reorderModal, setReorderModal] = useState({ isOpen: false, order: null as Order | null });
   const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
-    // 檢查是否登入
     const token = localStorage.getItem('somalink_token') || sessionStorage.getItem('somalink_token');
     if (!token) {
       router.replace('/login');
@@ -68,7 +40,8 @@ export default function OrdersPage() {
 
     const fetchOrders = async () => {
       try {
-        const data = await api.get('/orders');
+        // ✅ 3. 指定 API 回傳型別為 Order[]
+        const data = await api.get<Order[]>('/orders');
         setOrders(data);
       } catch (error) {
         console.error('Failed to fetch orders', error);
@@ -79,7 +52,6 @@ export default function OrdersPage() {
     fetchOrders();
   }, [router]);
 
-  // --- 刪除邏輯 ---
   const confirmDelete = (orderId: string) => {
     setDeleteModal({ isOpen: true, orderId });
   };
@@ -99,7 +71,6 @@ export default function OrdersPage() {
     }
   };
 
-  // --- 再次購買邏輯 ---
   const confirmReorder = (order: Order) => {
     setReorderModal({ isOpen: true, order });
   };
@@ -109,17 +80,20 @@ export default function OrdersPage() {
     if (!order) return;
 
     order.items.forEach(item => {
+      // ✅ 4. 安全轉型：將 JsonObject 轉為我們定義的 Snapshot 介面
+      const snapshot = item.priceSnapshot as unknown as PriceSnapshot;
+
       const cartItem: CartItem = {
-        internalId: crypto.randomUUID(), 
-        productId: item.product?.id,     
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        internalId: crypto.randomUUID() as any, 
+        productId: item.product?.id || '',     
         productName: item.product?.name || '未知商品',
-        // 使用當時的快照價格重新計算單價 (或根據您的需求抓取最新價格)
-        unitPrice: Number(item.priceSnapshot?.basePrice || 0) + 
-                   Number(item.priceSnapshot?.sizeSurcharge || 0) +
-                   Number(item.priceSnapshot?.colorSurcharge || 0) +
-                   Number(item.priceSnapshot?.materialSurcharge || 0) +
-                   Number(item.priceSnapshot?.handleSurcharge || 0) +
-                   (item.serviceType === 'assembled' ? Number(item.priceSnapshot?.assemblyFee || 0) : 0),
+        unitPrice: Number(snapshot.basePrice || 0) + 
+                   Number(snapshot.sizeSurcharge || 0) +
+                   Number(snapshot.colorSurcharge || 0) +
+                   Number(snapshot.materialSurcharge || 0) +
+                   Number(snapshot.handleSurcharge || 0) +
+                   (item.serviceType === 'assembled' ? Number(snapshot.assemblyFee || 0) : 0),
         quantity: item.quantity,
         subtotal: Number(item.subtotal),
         serviceType: item.serviceType,
@@ -141,7 +115,6 @@ export default function OrdersPage() {
     router.push('/cart');
   };
 
-  // 處理列印開啟 (傳遞 Token)
   const handlePrint = (orderId: string) => {
     const token = localStorage.getItem('somalink_token') || sessionStorage.getItem('somalink_token');
     if (token) {
@@ -168,7 +141,6 @@ export default function OrdersPage() {
   return (
     <div className="min-h-screen bg-gray-50 py-12">
       
-      {/* 刪除確認彈窗 */}
       <Modal 
         isOpen={deleteModal.isOpen}
         onClose={() => setDeleteModal({ isOpen: false, orderId: '' })}
@@ -180,7 +152,6 @@ export default function OrdersPage() {
         onConfirm={handleDelete}
       />
 
-      {/* 再次購買確認彈窗 */}
       <Modal 
         isOpen={reorderModal.isOpen}
         onClose={() => setReorderModal({ isOpen: false, order: null })}
@@ -231,7 +202,6 @@ export default function OrdersPage() {
                   </div>
 
                   <div className="flex justify-end items-center gap-3">
-                    {/* ✨ 修正：這裡改為呼叫 confirmReorder (觸發彈窗)，而不是 handleReorder (執行動作) */}
                     <button 
                       onClick={() => confirmReorder(order)}
                       className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 border border-blue-200"

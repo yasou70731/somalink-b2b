@@ -6,12 +6,19 @@ import { api } from '@/lib/api';
 import { Loader2, Lock, Mail, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 
+// ✅ 定義錯誤型別，解決 catch block 中的 any
+interface ApiError {
+  response?: {
+    status?: number;
+    data?: { message?: string };
+  };
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   
-  // ✨ 新增：記住我狀態
   const [rememberMe, setRememberMe] = useState(false);
   
   const [formData, setFormData] = useState({ email: '', password: '' });
@@ -22,29 +29,28 @@ export default function LoginPage() {
     setErrorMsg(null);
 
     try {
-      const data = await api.post('/auth/login', formData);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const data: any = await api.post('/auth/login', formData);
       const { access_token, user } = data;
 
-      // ✨ 根據「記住我」選擇儲存位置
       if (rememberMe) {
-        // 存入 LocalStorage (永久)
         localStorage.setItem('somalink_token', access_token);
         localStorage.setItem('somalink_user', JSON.stringify(user));
-        // 清除 Session 以防萬一
         sessionStorage.removeItem('somalink_token');
         sessionStorage.removeItem('somalink_user');
       } else {
-        // 存入 SessionStorage (關閉分頁即失效)
         sessionStorage.setItem('somalink_token', access_token);
         sessionStorage.setItem('somalink_user', JSON.stringify(user));
-        // 清除 Local
         localStorage.removeItem('somalink_token');
         localStorage.removeItem('somalink_user');
       }
 
       router.push('/');
-    } catch (err: any) {
+    } catch (error) {
+      // ✅ 修正：使用型別斷言取代 any
+      const err = error as ApiError;
       console.error('登入失敗:', err);
+      
       if (err.response?.status === 401) {
         setErrorMsg('帳號或密碼錯誤');
       } else {
@@ -96,7 +102,6 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* ✨ 新增：記住我 & 忘記密碼 */}
           <div className="flex items-center justify-between">
             <div className="flex items-center">
               <input

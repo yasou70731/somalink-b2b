@@ -1,12 +1,18 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react'; // ✨ 引入 Suspense
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Lock, Loader2, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 
-// ✨ 1. 將原本的頁面邏輯拆分到這個子元件中
+// ✅ 定義錯誤型別
+interface ApiError {
+  response?: {
+    data?: { message?: string };
+  };
+}
+
 function ResetPasswordContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -18,7 +24,6 @@ function ResetPasswordContent() {
   const [isSuccess, setIsSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // 如果網址沒有 Token，踢回登入頁
   useEffect(() => {
     if (!token) {
       router.replace('/login');
@@ -40,7 +45,9 @@ function ResetPasswordContent() {
     try {
       await api.auth.resetPassword(token, password);
       setIsSuccess(true);
-    } catch (err: any) {
+    } catch (error) {
+      // ✅ 修正：使用型別斷言
+      const err = error as ApiError;
       console.error(err);
       setErrorMsg(err.response?.data?.message || '重設失敗，連結可能已過期或無效');
     } finally {
@@ -123,7 +130,6 @@ function ResetPasswordContent() {
   );
 }
 
-// ✨ 2. 主頁面元件：只負責 Suspense 包裹與佈局
 export default function ResetPasswordPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 font-sans">

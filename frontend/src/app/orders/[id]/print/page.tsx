@@ -2,13 +2,40 @@
 
 import { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation'; 
-import { api } from '@/lib/api';
+import { api, Order, OrderItem } from '@/lib/api'; 
 import { Loader2, Printer, MapPin, Phone, User, MessageSquare } from 'lucide-react';
+
+// ✅ 1. 定義擴充型別 (補足 API 回傳但原本介面沒寫到的欄位)
+interface OrderUser {
+  dealerProfile?: {
+    companyName?: string;
+    contactPerson?: string;
+    phone?: string;
+  };
+}
+
+// 擴充 Order 介面，加入 user 欄位
+interface ExtendedOrder extends Order {
+  user?: OrderUser;
+}
+
+// 擴充 Product 介面，加入 sku
+interface ExtendedProduct {
+  sku?: string;
+}
+
+// 定義高度資料結構 (解決 JsonObject 取值問題)
+interface HeightData {
+  singleValue?: number;
+  mid?: number;
+}
 
 export default function PrintDeliveryNotePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter(); 
-  const [order, setOrder] = useState<any>(null);
+  
+  // ✅ 2. 使用擴充後的型別
+  const [order, setOrder] = useState<ExtendedOrder | null>(null);
   const [showPrice, setShowPrice] = useState(true); 
   const [isReady, setIsReady] = useState(false);
 
@@ -25,7 +52,9 @@ export default function PrintDeliveryNotePage({ params }: { params: Promise<{ id
 
   useEffect(() => {
     if (!isReady) return;
-    api.get(`/orders/${id}`)
+    
+    // ✅ 移除多餘的 eslint-disable 註解，因為 api.get 現在已有明確型別
+    api.get<ExtendedOrder>(`/orders/${id}`)
       .then(res => setOrder(res))
       .catch(err => {
         console.error(err);
@@ -63,10 +92,7 @@ export default function PrintDeliveryNotePage({ params }: { params: Promise<{ id
         </button>
       </div>
 
-      {/* A4 紙張區域 
-          ✨ 修改 1: 移除 min-h-[297mm]，改用 min-h-screen 或 auto，並在 print 時設為 h-auto
-          ✨ 修改 2: 移除 flex flex-col，改用 block 讓內容自然流動
-      */}
+      {/* A4 紙張區域 */}
       <div className="max-w-[210mm] mx-auto bg-white shadow-xl print:shadow-none p-8 print:p-6 text-black font-sans relative box-border print:h-auto print:min-h-0">
         
         {/* Header */}
@@ -97,6 +123,7 @@ export default function PrintDeliveryNotePage({ params }: { params: Promise<{ id
           <div className="border-2 border-black rounded p-3">
             <h3 className="text-xs font-bold bg-gray-200 px-2 py-0.5 mb-2 inline-block rounded text-black print:border print:border-black">訂購經銷商 (Bill To)</h3>
             <div className="space-y-0.5 text-sm text-black">
+              {/* ✅ 3. 直接使用擴充後的屬性，不需 as any */}
               <p><span className="font-bold w-16 inline-block">公司名稱：</span><span className="font-bold">{order.user?.dealerProfile?.companyName}</span></p>
               <p><span className="font-bold w-16 inline-block">聯絡人：</span>{order.user?.dealerProfile?.contactPerson}</p>
               <p><span className="font-bold w-16 inline-block">電話：</span>{order.user?.dealerProfile?.phone}</p>
@@ -143,7 +170,7 @@ export default function PrintDeliveryNotePage({ params }: { params: Promise<{ id
           </div>
         )}
 
-        {/* 產品明細 - ✨ 修改 3: 移除 flex-1，讓它自然佔用高度 */}
+        {/* 產品明細 */}
         <div className="mb-4">
           <table className="w-full border-collapse">
             <thead>
@@ -156,34 +183,40 @@ export default function PrintDeliveryNotePage({ params }: { params: Promise<{ id
               </tr>
             </thead>
             <tbody className="text-sm text-black">
-              {order.items?.map((item: any, index: number) => (
-                <tr key={index} className="border-b border-black break-inside-avoid">
-                  <td className="py-2 px-2 align-top font-bold text-center">{index + 1}</td>
-                  <td className="py-2 px-2 align-top">
-                    <p className="font-bold text-sm">{item.product?.name}</p>
-                    <div className="text-black text-[10px] mt-1 grid grid-cols-2 gap-x-2 gap-y-0.5 font-mono font-medium">
-                      <p>型號: {item.product?.sku}</p>
-                      <p>顏色: {item.colorName}</p>
-                      <p>材質: {item.materialName}</p>
-                      <p>開向: {item.openingDirection}</p>
-                      <p>模式: {item.serviceType === 'assembled' ? '連工帶料' : '純材料'}</p>
-                      {item.handleName && <p className="col-span-2 font-bold text-blue-900">把手: {item.handleName}</p>}
-                    </div>
-                    <div className="mt-1 bg-white px-1.5 py-0.5 rounded inline-block text-[10px] font-mono border border-black font-bold">
-                      W: {item.widthMatrix?.mid} x H: {item.heightData?.singleValue || item.heightData?.mid}
-                      {item.isCeilingMounted && <span className="ml-1 text-black font-extrabold">(封頂)</span>}
-                    </div>
-                  </td>
-                  <td className="py-2 px-2 text-center align-top font-bold">{item.quantity}</td>
-                  {showPrice && <td className="py-2 px-2 text-right align-top font-mono font-medium">${Number(item.unitPrice || item.subtotal / item.quantity).toLocaleString()}</td>}
-                  {showPrice && <td className="py-2 px-2 text-right align-top font-bold font-mono">${Number(item.subtotal).toLocaleString()}</td>}
-                </tr>
-              ))}
+              {order.items?.map((item: OrderItem, index: number) => {
+                // ✅ 4. 安全轉型 heightData 和 product
+                const heightInfo = item.heightData as unknown as HeightData;
+                const productInfo = item.product as unknown as ExtendedProduct;
+
+                return (
+                  <tr key={index} className="border-b border-black break-inside-avoid">
+                    <td className="py-2 px-2 align-top font-bold text-center">{index + 1}</td>
+                    <td className="py-2 px-2 align-top">
+                      <p className="font-bold text-sm">{item.product?.name}</p>
+                      <div className="text-black text-[10px] mt-1 grid grid-cols-2 gap-x-2 gap-y-0.5 font-mono font-medium">
+                        <p>型號: {productInfo.sku}</p>
+                        <p>顏色: {item.colorName}</p>
+                        <p>材質: {item.materialName}</p>
+                        <p>開向: {item.openingDirection}</p>
+                        <p>模式: {item.serviceType === 'assembled' ? '連工帶料' : '純材料'}</p>
+                        {item.handleName && <p className="col-span-2 font-bold text-blue-900">把手: {item.handleName}</p>}
+                      </div>
+                      <div className="mt-1 bg-white px-1.5 py-0.5 rounded inline-block text-[10px] font-mono border border-black font-bold">
+                        W: {item.widthMatrix?.mid} x H: {heightInfo?.singleValue || heightInfo?.mid}
+                        {item.isCeilingMounted && <span className="ml-1 text-black font-extrabold">(封頂)</span>}
+                      </div>
+                    </td>
+                    <td className="py-2 px-2 text-center align-top font-bold">{item.quantity}</td>
+                    {showPrice && <td className="py-2 px-2 text-right align-top font-mono font-medium">${Number(item.subtotal / item.quantity).toLocaleString()}</td>}
+                    {showPrice && <td className="py-2 px-2 text-right align-top font-bold font-mono">${Number(item.subtotal).toLocaleString()}</td>}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
 
-        {/* 總計與簽名 - ✨ 修改 4: 確保跟隨內容，不被推到底部 */}
+        {/* 總計與簽名 */}
         <div className="break-inside-avoid">
           {showPrice && (
             <div className="flex justify-end mb-6 border-t-2 border-black pt-2">

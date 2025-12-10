@@ -1,19 +1,13 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  eslint: {
-    // 忽略 ESLint 錯誤
-    ignoreDuringBuilds: true,
-  },
-  typescript: {
-    // 忽略 TypeScript 類型錯誤
-    ignoreBuildErrors: true,
-  },
+  // 我們移除了 eslint 和 typescript 的 ignore 設定
+  // 這樣打包時才會真的檢查程式碼品質與型別安全
+
   images: {
-    // 在這裡加入允許的外部圖片網域
-    // 根據你的報錯，通常是 Unsplash 的圖片
+    // 保留你的外部圖片來源設定，這對應你的圖片功能
     domains: [
-      'images.unsplash.com', 
-      'plus.unsplash.com',
+      'images.unsplash.com',
+      'plus.unsplash.com', 
       'source.unsplash.com'
     ],
   },

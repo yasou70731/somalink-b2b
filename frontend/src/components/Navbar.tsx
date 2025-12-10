@@ -1,19 +1,32 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter, usePathname } from 'next/navigation'; // ✨ 新增 usePathname
+import { useRouter, usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
-// 引入圖示
-import { ShoppingCart, Search, User, LogOut, History, Wallet, UserCog, Package, Menu, X, AlertTriangle, ShieldAlert } from 'lucide-react';
+// ✅ 1. 移除未使用的 Package, ShieldAlert
+import { ShoppingCart, Search, User, LogOut, History, Wallet, UserCog, Menu, X, AlertTriangle } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import Modal from '@/components/Modal';
 
+// ✅ 2. 定義 User 型別，解決 'any' 報錯
+interface UserProfile {
+  email: string;
+  name: string;
+  isActive: boolean;
+  dealerProfile?: {
+    companyName?: string;
+    level?: string;
+    walletBalance?: number;
+  };
+}
+
 export default function Navbar() {
   const router = useRouter();
-  const pathname = usePathname(); // ✨ 取得當前路徑
+  const pathname = usePathname();
   const { cartCount, clearCart } = useCart();
   const [mounted, setMounted] = useState(false);
-  const [user, setUser] = useState<any>(null);
+  // ✅ 使用定義好的型別
+  const [user, setUser] = useState<UserProfile | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   
   const [showLogoutModal, setShowLogoutModal] = useState(false);
@@ -22,22 +35,22 @@ export default function Navbar() {
   useEffect(() => {
     setMounted(true);
     
-    // ✨ 抽取出檢查邏輯，並確保每次路徑改變時都執行
     const checkAuth = () => {
       const storedUser = localStorage.getItem('somalink_user') || sessionStorage.getItem('somalink_user');
       if (storedUser) {
         try { 
           setUser(JSON.parse(storedUser)); 
-        } catch (e) {
+        // ✅ 3. 移除未使用的 (e)
+        } catch {
           setUser(null);
         }
       } else {
-        setUser(null); // 確保登出後狀態即時清空
+        setUser(null);
       }
     };
 
     checkAuth();
-  }, [pathname]); // ✨ 關鍵修正：將 pathname 加入依賴，切換頁面時自動更新狀態
+  }, [pathname]);
 
   const handleLogout = () => {
     localStorage.removeItem('somalink_token');
@@ -52,14 +65,12 @@ export default function Navbar() {
     router.push('/login'); 
   };
 
-  // 受保護的導航處理 (增加審核狀態檢查)
   const handleProtectedNav = (path: string) => {
     if (!user) {
       router.push('/login');
       return;
     }
 
-    // 如果帳號尚未開通 (isActive 為 false)，阻止進入並顯示提示
     if (user.isActive === false) {
       setShowPendingModal(true);
       return;

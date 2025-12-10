@@ -7,26 +7,48 @@ import HeroBlock from '@/components/blocks/HeroBlock';
 import FeaturesBlock from '@/components/blocks/FeaturesBlock';
 import ProductListBlock from '@/components/blocks/ProductListBlock';
 
+// ✅ 1. 定義區塊資料介面
+interface PageBlock {
+  id: string;
+  type: 'HERO' | 'FEATURES' | 'PRODUCT_LIST';
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  data: any; // 區塊資料結構較多變，允許 any
+}
+
+// ✅ 2. 定義系統設定介面 (公司資訊)
+interface SystemSettings {
+  company_name?: string;
+  tax_id?: string;
+  address?: string;
+  phone?: string;
+  copyright_text?: string;
+}
+
 export default function HomePage() {
   const [announcement, setAnnouncement] = useState<string | null>(null);
   const [showBanner, setShowBanner] = useState(true);
-  const [blocks, setBlocks] = useState<any[]>([]);
+  
+  // ✅ 3. 使用定義好的型別取代 any[]
+  const [blocks, setBlocks] = useState<PageBlock[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // ✨ 系統規則 (含公司資訊)
-  const [systemRules, setSystemRules] = useState<any>(null);
+  // ✅ 4. 使用定義好的型別取代 any
+  const [systemRules, setSystemRules] = useState<SystemSettings | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const annRes = await api.get('/announcements/active');
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const annRes: any = await api.get('/announcements/active');
         if (annRes?.content) setAnnouncement(annRes.content);
 
-        const configRes = await api.get('/site-config/homepage');
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const configRes: any = await api.get('/site-config/homepage');
         if (configRes?.blocks) setBlocks(configRes.blocks);
 
-        // ✨ 抓取系統規則 (公司資訊)
-        const rulesRes = await api.get('/site-config/rules');
+        // ✅ 抓取系統規則 (公司資訊)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rulesRes: any = await api.get('/site-config/rules');
         if (rulesRes?.settings) setSystemRules(rulesRes.settings);
 
       } catch (err) {

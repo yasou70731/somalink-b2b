@@ -2,29 +2,45 @@
 
 import { useState, useEffect } from 'react';
 import Link from "next/link";
-import Image from 'next/image'; // ✨ 引入
+import Image from 'next/image';
 import { ArrowRight, Megaphone, X, Loader2 } from "lucide-react";
-import { api } from '../../lib/api'; 
+import { api } from '@/lib/api'; 
 
-export default function HomePage() {
+// ✅ 定義系列資料型別
+interface Series {
+  id: string;
+  name: string;
+  displayName?: string;
+  description?: string;
+  imageUrl?: string;
+  isActive: boolean;
+  priceStart?: number;
+}
+
+export default function PortalPage() {
   const [announcement, setAnnouncement] = useState<string | null>(null);
   const [showBanner, setShowBanner] = useState(true);
   
-  const [seriesList, setSeriesList] = useState<any[]>([]);
+  // ✅ 使用 Series[] 型別取代 any[]
+  const [seriesList, setSeriesList] = useState<Series[]>([]);
   const [loadingSeries, setLoadingSeries] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const annRes = await api.get('/announcements/active');
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const annRes: any = await api.get('/announcements/active');
         if (annRes && annRes.content) setAnnouncement(annRes.content);
 
-        const seriesRes = await api.get('/series');
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const seriesRes: any = await api.get('/series');
         const data = Array.isArray(seriesRes) ? seriesRes : [];
-        const activeSeries = data.filter((s: any) => s.isActive);
+        
+        // ✅ 這裡現在知道 s 是 Series 型別了
+        const activeSeries = data.filter((s: Series) => s.isActive);
         setSeriesList(activeSeries);
       } catch (err) { 
-        console.error('無法取得首頁資料', err); 
+        console.error('無法取得系列資料', err); 
         setSeriesList([]); 
       } finally {
         setLoadingSeries(false);
@@ -64,7 +80,6 @@ export default function HomePage() {
                 className="group bg-white rounded-2xl overflow-hidden border border-gray-200 hover:shadow-xl hover:border-blue-300 transition-all duration-300 flex flex-col"
               >
                 <div className="relative h-52 overflow-hidden bg-gray-100">
-                  {/* ✨ 改用 Next.js Image */}
                   <Image 
                     src={series.imageUrl || "https://images.unsplash.com/photo-1600607686527-6fb886090705?auto=format&fit=crop&q=80&w=800"} 
                     alt={series.name}

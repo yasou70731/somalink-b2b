@@ -2,27 +2,43 @@
 
 import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
+import Image from 'next/image'; // ✅ 1. 引入 Next Image
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Search, ShoppingCart, Lock } from 'lucide-react'; // ✨ 新增 Lock 圖示
+// ✅ 2. 移除未使用的 Lock
+import { ArrowLeft, Search, ShoppingCart } from 'lucide-react'; 
 import { api } from '@/lib/api';
-import Modal from '@/components/Modal'; // ✨ 引入彈窗
+import Modal from '@/components/Modal';
+
+// ✅ 3. 定義 Product 資料型別，取代 any
+interface Product {
+  id: string;
+  name: string;
+  sku?: string;
+  basePrice: number;
+  series?: string;
+  images?: string[];
+  imageUrl?: string;
+}
 
 export default function SeriesListPage({ params }: { params: Promise<{ name: string }> }) {
   const { name } = use(params);
   const seriesName = decodeURIComponent(name);
   const router = useRouter();
 
-  const [products, setProducts] = useState<any[]>([]);
+  // ✅ 4. 使用 Product[] 型別
+  const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // ✨ 登入提示彈窗狀態
   const [showLoginModal, setShowLoginModal] = useState(false);
 
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        const res = await api.get('/products');
+        // ✅ 告訴 API 回傳的是 Product[]
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const res = await api.get<any[]>('/products');
         const data = Array.isArray(res) ? res : [];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const filtered = data.filter((p: any) => p.series === seriesName);
         setProducts(filtered);
       } catch (err) {
@@ -35,16 +51,12 @@ export default function SeriesListPage({ params }: { params: Promise<{ name: str
     fetchProducts();
   }, [seriesName]);
 
-  // ✨✨✨ 點擊商品時的檢查邏輯 ✨✨✨
   const handleProductClick = (productId: string) => {
-    // 檢查 LocalStorage 或 SessionStorage 是否有 Token
     const token = localStorage.getItem('somalink_token') || sessionStorage.getItem('somalink_token');
     
     if (!token) {
-      // 沒登入 -> 跳出彈窗
       setShowLoginModal(true);
     } else {
-      // 有登入 -> 正常跳轉
       router.push(`/product/${productId}`);
     }
   };
@@ -52,7 +64,6 @@ export default function SeriesListPage({ params }: { params: Promise<{ name: str
   return (
     <div className="min-h-screen bg-gray-50">
       
-      {/* ✨ 提示彈窗 */}
       <Modal 
         isOpen={showLoginModal} 
         title="會員專屬權限"
@@ -64,7 +75,6 @@ export default function SeriesListPage({ params }: { params: Promise<{ name: str
         onConfirm={() => router.push('/login')}
       />
 
-      {/* Header */}
       <header className="bg-white shadow-sm border-b border-gray-100 h-16 flex items-center px-4 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto w-full flex items-center gap-4">
           <Link href="/" className="p-2 hover:bg-gray-100 rounded-full transition-colors">
@@ -74,7 +84,6 @@ export default function SeriesListPage({ params }: { params: Promise<{ name: str
         </div>
       </header>
 
-      {/* Content */}
       <main className="max-w-7xl mx-auto px-4 py-8">
         {loading ? (
           <div className="text-center py-12 text-gray-500">載入產品中...</div>
@@ -96,16 +105,17 @@ export default function SeriesListPage({ params }: { params: Promise<{ name: str
               return (
                 <div 
                   key={product.id} 
-                  // ✨ 改用 onClick 觸發檢查，而不是直接 Link
                   onClick={() => handleProductClick(product.id)}
                   className="group bg-white rounded-xl overflow-hidden border border-gray-200 hover:shadow-lg hover:border-blue-300 transition-all duration-300 flex flex-col cursor-pointer relative"
                 >
                   <div className="relative h-48 bg-gray-100 overflow-hidden">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img 
+                    {/* ✅ 5. 改用 Next Image */}
+                    <Image 
                       src={thumb} 
                       alt={product.name} 
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                      fill
+                      className="object-cover group-hover:scale-105 transition-transform duration-500" 
+                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
                     />
                   </div>
                   

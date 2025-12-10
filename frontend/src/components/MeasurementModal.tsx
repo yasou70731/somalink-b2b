@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Info, Check, AlertTriangle } from 'lucide-react';
+// ✅ 修正：移除未使用的 AlertTriangle
+import { X, Info, Check } from 'lucide-react';
 import clsx from 'clsx';
 
 export interface MeasurementData {
@@ -26,7 +27,6 @@ export default function MeasurementModal({ isOpen, onClose, onConfirm }: Measure
   const [isCeilingMounted, setIsCeilingMounted] = useState(true);
 
   // 環境數據
-  // ✨ 修正：預設為 false (代表無誤差)，只有勾選有誤差時才需要輸入
   const [hasFloorError, setHasFloorError] = useState(false); 
   const [floorDiff, setFloorDiff] = useState('');
 
@@ -54,7 +54,7 @@ export default function MeasurementModal({ isOpen, onClose, onConfirm }: Measure
   };
 
   const handleConfirm = () => {
-    // ✨ 驗證邏輯修正：只有在「有誤差」且「未填寫數值」時才擋下
+    // 驗證邏輯修正：只有在「有誤差」且「未填寫數值」時才擋下
     if (hasFloorError && !floorDiff) {
       alert('您勾選了有地面高低差，請輸入誤差數值');
       return;

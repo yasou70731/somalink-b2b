@@ -1,6 +1,17 @@
 import { Ruler, Hammer, ShieldCheck } from "lucide-react";
 
-export default function FeaturesBlock({ data }: { data: any }) {
+// ✅ 定義資料型別
+interface FeatureItem {
+  title: string;
+  desc: string;
+}
+
+interface FeaturesData {
+  title: string;
+  items: FeatureItem[];
+}
+
+export default function FeaturesBlock({ data }: { data: FeaturesData }) {
   const items = data.items || [];
   const icons = [<Ruler key={0} className="w-7 h-7 text-blue-600" />, <Hammer key={1} className="w-7 h-7 text-blue-600" />, <ShieldCheck key={2} className="w-7 h-7 text-blue-600" />];
 
@@ -11,7 +22,7 @@ export default function FeaturesBlock({ data }: { data: any }) {
           <h2 className="text-3xl font-bold text-gray-900 mb-4">{data.title}</h2>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-          {items.map((item: any, idx: number) => (
+          {items.map((item, idx) => (
             <div key={idx} className="bg-gray-50 p-8 rounded-3xl border border-gray-100 hover:shadow-lg transition-all">
               <div className="w-14 h-14 bg-blue-100 rounded-2xl flex items-center justify-center mb-6">
                 {icons[idx % 3]}

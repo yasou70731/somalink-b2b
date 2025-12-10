@@ -6,6 +6,13 @@ import { api } from '@/lib/api';
 import { Loader2, UserPlus, Building2, FileText, User, Phone, Mail, Lock, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 
+// ✅ 定義錯誤型別
+interface ApiError {
+  response?: {
+    data?: { message?: string };
+  };
+}
+
 export default function RegisterPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
@@ -25,14 +32,14 @@ export default function RegisterPage() {
     setIsLoading(true);
 
     try {
-      // 呼叫後端註冊 API
-      // 後端會自動建立 User + DealerProfile (預設 C 級)
       await api.post('/users', formData);
       
       alert('🎉 註冊成功！請使用剛建立的帳號登入。');
-      router.push('/login'); // 導向登入頁
+      router.push('/login'); 
 
-    } catch (err: any) {
+    } catch (error) {
+      // ✅ 修正：使用型別斷言
+      const err = error as ApiError;
       console.error(err);
       alert('註冊失敗：' + (err.response?.data?.message || '請檢查資料是否正確'));
     } finally {
