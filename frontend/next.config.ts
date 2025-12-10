@@ -1,9 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // 允許的圖片來源網域設定
-  // 這解決了 "Failed to load resource" 和 "hostname is not configured" 的問題
   images: {
     remotePatterns: [
+      // 原有的 Unsplash 設定
       {
         protocol: 'https',
         hostname: 'images.unsplash.com',
@@ -16,9 +15,13 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'source.unsplash.com',
       },
+      // ✨✨✨ 新增：允許 Cloudinary 圖片 ✨✨✨
+      {
+        protocol: 'https',
+        hostname: 'res.cloudinary.com',
+      },
     ],
   },
-  // 你的程式碼已經通過 Lint 檢查，所以不需要再加入 ignoreBuildErrors 或 ignoreDuringBuilds
 };
 
 export default nextConfig;
