@@ -29,8 +29,9 @@ export default function ProductListBlock({ data }: { data: ProductListData }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // ✨ 修改：加入時間戳記 (timestamp) 來強制瀏覽器抓取最新資料，避開快取
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    api.get<any[]>('/series').then((res) => {
+    api.get<any[]>(`/series?_t=${new Date().getTime()}`).then((res) => {
       const list = Array.isArray(res) ? res : [];
       const typedList = list as Series[];
       setSeriesList(typedList.filter((s) => s.isActive).slice(0, data.count || 4));
