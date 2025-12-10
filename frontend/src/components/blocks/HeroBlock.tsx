@@ -10,21 +10,35 @@ interface HeroData {
   subtitle?: string;
 }
 
-// ✅ 修正：將常數移到 Component 外面，避免每次渲染都重新建立陣列
-// 這樣 useMemo 就不會因為 defaultImages 改變而失效，也不會跳出依賴警告
+// 這些是備用的有效圖片
 const DEFAULT_IMAGES = [
   "https://images.unsplash.com/photo-1620626012053-93f2bc72338d?auto=format&fit=crop&q=80&w=1920", // 辦公室/門扇
   "https://images.unsplash.com/photo-1631679706909-1844bbd07221?auto=format&fit=crop&q=80&w=1920", // 室內設計
   "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80&w=1920"  // 現代建築
 ];
 
+// ❌ 已知失效的圖片 ID 列表 (黑名單)
+const BROKEN_IMAGES = [
+  "photo-1584622050111-993a426fbf0a", // 導致 404 的這張
+];
+
 export default function HeroBlock({ data }: { data: HeroData }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   const images = useMemo(() => {
-    // 使用外部常數 DEFAULT_IMAGES
-    return (data.images && data.images.length > 0) ? data.images : DEFAULT_IMAGES;
-  }, [data.images]); // 這裡只需要監聽 data.images 即可
+    // 1. 取得 API 資料或空陣列
+    const apiImages = data.images || [];
+
+    // 2. 過濾掉已知的失效圖片連結
+    const validApiImages = apiImages.filter(url => {
+      if (!url) return false;
+      // 如果網址包含失效的 ID，就過濾掉
+      return !BROKEN_IMAGES.some(brokenId => url.includes(brokenId));
+    });
+
+    // 3. 如果過濾後還有圖片，就使用 API 的；否則使用預設圖
+    return validApiImages.length > 0 ? validApiImages : DEFAULT_IMAGES;
+  }, [data.images]); 
 
   useEffect(() => {
     if (images.length <= 1) return;
