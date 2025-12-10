@@ -1,24 +1,32 @@
 'use client';
-import { useState, useEffect, useMemo } from 'react'; // ✨ 1. 補上 useMemo
+import { useState, useEffect, useMemo } from 'react';
 import Link from "next/link";
 import Image from 'next/image';
 import { ArrowRight } from "lucide-react";
 
-// ✨ 2. 定義資料介面，解決 'any' 報錯
 interface HeroData {
   images?: string[];
   title?: string;
   subtitle?: string;
 }
 
+// ✅ 修正：將常數移到 Component 外面，避免每次渲染都重新建立陣列
+// 這樣 useMemo 就不會因為 defaultImages 改變而失效，也不會跳出依賴警告
+const DEFAULT_IMAGES = [
+  "https://images.unsplash.com/photo-1620626012053-93f2bc72338d?auto=format&fit=crop&q=80&w=1920", // 辦公室/門扇
+  "https://images.unsplash.com/photo-1631679706909-1844bbd07221?auto=format&fit=crop&q=80&w=1920", // 室內設計
+  "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80&w=1920"  // 現代建築
+];
+
 export default function HeroBlock({ data }: { data: HeroData }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
-  // ✨ 3. 使用 useMemo 確保陣列參考穩定，消除依賴警告
-  const images = useMemo(() => data.images || [], [data.images]);
+  const images = useMemo(() => {
+    // 使用外部常數 DEFAULT_IMAGES
+    return (data.images && data.images.length > 0) ? data.images : DEFAULT_IMAGES;
+  }, [data.images]); // 這裡只需要監聽 data.images 即可
 
   useEffect(() => {
-    // 如果圖片少於 2 張，就不需要輪播
     if (images.length <= 1) return;
 
     const timer = setInterval(() => {
@@ -26,7 +34,7 @@ export default function HeroBlock({ data }: { data: HeroData }) {
     }, 5000);
 
     return () => clearInterval(timer);
-  }, [images]); // 現在 images 是穩定的，這裡就不會報錯了
+  }, [images]);
 
   return (
     <div className="relative h-[85vh] w-full overflow-hidden bg-gray-900">
@@ -46,10 +54,8 @@ export default function HeroBlock({ data }: { data: HeroData }) {
         </div>
       ))}
       
-      {/* 黑色遮罩 */}
       <div className="absolute inset-0 bg-black/40" />
       
-      {/* 文字內容 */}
       <div className="relative z-10 h-full max-w-7xl mx-auto px-6 flex flex-col justify-center items-start text-white">
         <span className="bg-blue-600 text-white px-4 py-1 rounded-full text-sm font-bold mb-6">SOMA 松成有限公司</span>
         <h1 className="text-5xl md:text-7xl font-bold leading-tight mb-6 whitespace-pre-wrap">{data.title}</h1>

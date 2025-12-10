@@ -2,14 +2,13 @@
 
 import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
-import Image from 'next/image'; // ✅ 1. 引入 Next Image
+import Image from 'next/image'; 
 import { useRouter } from 'next/navigation';
-// ✅ 2. 移除未使用的 Lock
 import { ArrowLeft, Search, ShoppingCart } from 'lucide-react'; 
 import { api } from '@/lib/api';
 import Modal from '@/components/Modal';
 
-// ✅ 3. 定義 Product 資料型別，取代 any
+// 定義 Product 資料型別，取代 any
 interface Product {
   id: string;
   name: string;
@@ -25,7 +24,7 @@ export default function SeriesListPage({ params }: { params: Promise<{ name: str
   const seriesName = decodeURIComponent(name);
   const router = useRouter();
 
-  // ✅ 4. 使用 Product[] 型別
+  // 使用 Product[] 型別
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -34,7 +33,7 @@ export default function SeriesListPage({ params }: { params: Promise<{ name: str
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        // ✅ 告訴 API 回傳的是 Product[]
+        // 告訴 API 回傳的是 Product[]
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const res = await api.get<any[]>('/products');
         const data = Array.isArray(res) ? res : [];
@@ -109,7 +108,7 @@ export default function SeriesListPage({ params }: { params: Promise<{ name: str
                   className="group bg-white rounded-xl overflow-hidden border border-gray-200 hover:shadow-lg hover:border-blue-300 transition-all duration-300 flex flex-col cursor-pointer relative"
                 >
                   <div className="relative h-48 bg-gray-100 overflow-hidden">
-                    {/* ✅ 5. 改用 Next Image */}
+                    {/* 改用 Next Image */}
                     <Image 
                       src={thumb} 
                       alt={product.name} 
