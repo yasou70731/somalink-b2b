@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// ✨ 設定：強制指向本機後端 (開發時) 或線上版 (部署時)
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+// ✨ 設定：優先使用環境變數，若無則使用您的線上後端 (根據之前的錯誤訊息)
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://somalink-backend.onrender.com';
 
 // --- TypeScript 介面定義區 ---
 
@@ -79,7 +79,8 @@ const axiosInstance = axios.create({
 
 axiosInstance.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('somalink_admin_token');
+    // 【關鍵修正】這裡原本寫 'somalink_admin_token'，導致抓不到您存的 'admin_token'
+    const token = localStorage.getItem('admin_token');
     
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
