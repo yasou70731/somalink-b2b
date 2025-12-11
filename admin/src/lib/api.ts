@@ -73,19 +73,20 @@ const axiosInstance = axios.create({
 
 axiosInstance.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
-    // 【偵錯區塊 Start】
-    const token = localStorage.getItem('admin_token');
+    // 【萬能搜尋 Token】
+    // 同時檢查 'admin_token' 和 'somalink_admin_token'
+    // 這樣不管登入頁面存成什麼名字，只要有存，我們就抓得到
+    const token = localStorage.getItem('admin_token') || localStorage.getItem('somalink_admin_token');
     
-    // 請在 F12 Console 觀察這幾行字
-    console.log('🔍 [API Debug] 正在準備發送請求:', config.url);
-    console.log('🔍 [API Debug] 嘗試讀取 admin_token:', token ? '有抓到 Token (前10碼): ' + token.substring(0, 10) : '❌ 未抓到 Token');
-
+    // 偵錯日誌：顯示我們最後抓到了什麼
+    console.log('🔍 [API Debug] 請求路徑:', config.url);
     if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+       console.log('✅ [API Debug] 成功抓取 Token (前10碼):', token.substring(0, 10));
+       config.headers.Authorization = `Bearer ${token}`;
     } else {
-      console.warn('⚠️ [API Warning] 請求未包含 Token，可能會導致 401 錯誤');
+       console.error('❌ [API Error] 嚴重錯誤：LocalStorage 內找不到 admin_token 或 somalink_admin_token');
+       console.log('💡 [提示] 請嘗試登出後台並重新登入，以確保 Token 被寫入');
     }
-    // 【偵錯區塊 End】
   }
   return config;
 });
@@ -98,8 +99,9 @@ export const api = {
       const response = await axiosInstance.get(url);
       return response.data;
     } catch (error) {
+      // 這裡不 throw error，避免讓整個頁面崩潰，可以回傳 null 或空陣列讓前端處理
       console.error('❌ [API Error] GET 請求失敗:', url, error);
-      throw error;
+      throw error; 
     }
   },
   post: async (url: string, data: any) => {
