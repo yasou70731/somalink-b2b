@@ -7,28 +7,37 @@ export class NotificationsService {
   private transporter;
 
   constructor() {
-    // 1. 取得帳號
+    // 1. 讀取環境變數
     const user = process.env.SMTP_USER || process.env.EMAIL_USER;
     const pass = process.env.SMTP_PASS || process.env.EMAIL_PASS;
+    const host = process.env.SMTP_HOST || 'smtp.gmail.com';
+    // 預設使用 587，因為這是雲端環境最穩定的 Port
+    const port = Number(process.env.SMTP_PORT) || 587; 
+    
+    // 自動判斷 secure 設定 (465 為 true，其他通常為 false)
+    const isSecure = port === 465;
 
     if (user && pass) {
       
-      console.log(`📧 初始化 Gmail 郵件服務...`);
-      console.log(`   - 使用者: ${user}`);
-      console.log(`   - 模式: Service 'gmail' (自動配置) | IPv4 強制`);
+      console.log(`📧 初始化郵件服務...`);
+      console.log(`   - Host: ${host}`);
+      console.log(`   - Port: ${port}`);
+      console.log(`   - User: ${user}`);
+      console.log(`   - Secure: ${isSecure}`);
+      console.log(`   - IPv4: 強制開啟`);
 
       this.transporter = nodemailer.createTransport({
-        // ✨✨✨ 最後手段：使用 service: 'gmail' ✨✨✨
-        // 這會自動載入 Nodemailer 內建針對 Gmail 的最佳設定 (包含 Port 和加密方式)
-        // 這是最單純的設定方式，能排除所有手動設定錯誤
-        service: 'gmail',
+        host: host,
+        port: port,
+        secure: isSecure, 
         
         auth: {
           user: user,
           pass: pass,
         },
         
-        // 保持強制 IPv4 (這點對 Render 非常重要，不能拿掉)
+        // ✨✨✨ 關鍵設定：強制 IPv4 ✨✨✨
+        // 無論環境變數怎麼設，這點對 Render 連接 Gmail 至關重要
         family: 4, 
         
         // 寬鬆的 TLS 憑證檢查
@@ -36,7 +45,7 @@ export class NotificationsService {
           rejectUnauthorized: false
         },
 
-        // 設定 20 秒逾時，不要空等兩分鐘
+        // 連線逾時設定 (20秒)
         connectionTimeout: 20000, 
         greetingTimeout: 20000,
         socketTimeout: 20000,
@@ -64,6 +73,7 @@ export class NotificationsService {
       console.log(`📧 正在發送郵件給 ${to}...`);
       
       const info = await this.transporter.sendMail({
+        // 優先使用環境變數的寄件者名稱，若無則使用預設
         from: process.env.SMTP_FROM || '"SomaLink System" <no-reply@somalink.com>',
         to,
         subject,
