@@ -73,36 +73,33 @@ const axiosInstance = axios.create({
 
 axiosInstance.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
-    // 【萬能搜尋 Token】
-    // 同時檢查 'admin_token' 和 'somalink_admin_token'
-    // 這樣不管登入頁面存成什麼名字，只要有存，我們就抓得到
+    // 為了相容性，同時檢查 admin_token (後台常用) 與 somalink_admin_token (舊設定)
     const token = localStorage.getItem('admin_token') || localStorage.getItem('somalink_admin_token');
     
-    // 偵錯日誌：顯示我們最後抓到了什麼
-    console.log('🔍 [API Debug] 請求路徑:', config.url);
     if (token) {
-       console.log('✅ [API Debug] 成功抓取 Token (前10碼):', token.substring(0, 10));
-       config.headers.Authorization = `Bearer ${token}`;
-    } else {
-       console.error('❌ [API Error] 嚴重錯誤：LocalStorage 內找不到 admin_token 或 somalink_admin_token');
-       console.log('💡 [提示] 請嘗試登出後台並重新登入，以確保 Token 被寫入');
+      config.headers.Authorization = `Bearer ${token}`;
     }
   }
   return config;
 });
 
+axiosInstance.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    // 這裡可以處理全域錯誤，例如 401 自動登出
+    if (error.response && error.response.status === 401) {
+      // 可以在這裡加入轉址回登入頁的邏輯
+    }
+    return Promise.reject(error);
+  }
+);
+
 // --- API 方法導出 ---
 
 export const api = {
   get: async (url: string) => {
-    try {
-      const response = await axiosInstance.get(url);
-      return response.data;
-    } catch (error) {
-      // 這裡不 throw error，避免讓整個頁面崩潰，可以回傳 null 或空陣列讓前端處理
-      console.error('❌ [API Error] GET 請求失敗:', url, error);
-      throw error; 
-    }
+    const response = await axiosInstance.get(url);
+    return response.data;
   },
   post: async (url: string, data: any) => {
     const response = await axiosInstance.post(url, data);
@@ -117,6 +114,7 @@ export const api = {
     return response.data;
   },
   
+  // 圖片上傳
   uploadImage: async (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
