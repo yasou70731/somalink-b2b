@@ -10,15 +10,34 @@ export class NotificationsService {
     // 初始化 Nodemailer
     // 只有在設定了 SMTP_USER 時才啟用，避免開發環境報錯
     if (process.env.SMTP_USER) {
+      
+      // 1. 解析 Port，預設 465
+      const port = Number(process.env.SMTP_PORT) || 465;
+
+      // 2. 只有 Port 465 才啟用 secure (SSL)，Port 587 必須為 false (STARTTLS)
+      const isSecure = port === 465;
+
+      console.log(`📧 SMTP 設定初始化: Host=${process.env.SMTP_HOST} Port=${port} Secure=${isSecure}`);
+
       this.transporter = nodemailer.createTransport({
         host: process.env.SMTP_HOST || 'smtp.gmail.com',
-        port: Number(process.env.SMTP_PORT) || 465,
-        secure: true, // true for 465, false for other ports
+        port: port,
+        secure: isSecure, // ✨ 修正：動態判斷，避免 Port 587 連線超時
         auth: {
           user: process.env.SMTP_USER,
           pass: process.env.SMTP_PASS,
         },
+        // ✨ 新增：避免 Render 環境下的憑證驗證問題
+        tls: {
+          rejectUnauthorized: false
+        },
+        // 設定連線超時時間 (毫秒)
+        connectionTimeout: 10000, 
+        greetingTimeout: 10000,
+        socketTimeout: 10000
       });
+    } else {
+      console.warn('⚠️ 未設定 SMTP_USER，郵件發送功能將被停用 (僅印出 Log)');
     }
   }
 
@@ -36,6 +55,7 @@ export class NotificationsService {
     }
 
     try {
+      console.log(`📧 嘗試發送郵件給 ${to}...`);
       await this.transporter.sendMail({
         from: process.env.SMTP_FROM || '"SomaLink System" <no-reply@example.com>',
         to,
