@@ -7,7 +7,7 @@ import Image from 'next/image';
 import { 
   Trash2, ArrowRight, Loader2, ShoppingBag, AlertCircle, 
   Hammer, Package, MessageSquare, MapPin, Building2, 
-  User, Phone, Copy, UploadCloud, FileText, X, Printer 
+  User, Phone, Copy, UploadCloud, FileText, X, Printer, Wallet // ✨ 新增 Wallet 圖示
 } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { api } from '@/lib/api';
@@ -18,11 +18,14 @@ import Modal from '@/components/Modal';
 const CLOUDINARY_CLOUD_NAME = 'dnibj8za6'; 
 const CLOUDINARY_PRESET = 'yasou70731';  
 
+// ✨ 修正：補齊 UserProfile 的欄位定義，包含等級與餘額
 interface UserProfile {
   dealerProfile?: {
     address?: string;
     contactPerson?: string;
     phone?: string;
+    level?: string;         // ✨ 新增等級
+    walletBalance?: number; // ✨ 新增餘額
   };
 }
 
@@ -243,7 +246,7 @@ export default function CartPage() {
                   <Trash2 className="w-5 h-5" />
                 </button>
                 <div className="w-24 h-24 bg-gray-100 rounded-xl shrink-0 overflow-hidden relative">
-                   {/* ✅ 修正 1: 使用 item.productName 而不是 item.product.name */}
+                   {/* ✅ 改用 Next Image */}
                    <Image 
                      src="https://images.unsplash.com/photo-1600607686527-6fb886090705?auto=format&fit=crop&q=80&w=200" 
                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -287,6 +290,19 @@ export default function CartPage() {
           <div className="lg:col-span-1">
             <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm sticky top-24">
               <h2 className="text-xl font-bold text-gray-900 mb-6">訂單摘要</h2>
+              
+              {/* ✨✨✨ 新增：錢包餘額顯示 (僅 A/B 級會員顯示) ✨✨✨ */}
+              {currentUser?.dealerProfile && (currentUser.dealerProfile.level === 'A' || currentUser.dealerProfile.level === 'B') && (
+                <div className="mb-6 bg-blue-50 p-4 rounded-xl border border-blue-100 flex justify-between items-center">
+                  <span className="text-sm font-bold text-blue-800 flex items-center gap-2">
+                    <Wallet className="w-4 h-4" /> 錢包餘額
+                  </span>
+                  <span className="text-lg font-bold text-blue-700">
+                    ${Number(currentUser.dealerProfile.walletBalance || 0).toLocaleString()}
+                  </span>
+                </div>
+              )}
+
               <div className="space-y-4 mb-6">
                 <div className="flex justify-between text-gray-600"><span>商品總數</span><span>{items.length} 件</span></div>
                 <div className="flex justify-between text-lg font-bold text-gray-900 pt-4 border-t border-gray-100"><span>總金額</span><span>${cartTotal.toLocaleString()}</span></div>
