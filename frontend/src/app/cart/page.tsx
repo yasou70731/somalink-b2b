@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import Image from 'next/image'; // ✅ 引入 Next Image
+import Image from 'next/image';
 import { 
   Trash2, ArrowRight, Loader2, ShoppingBag, AlertCircle, 
   Hammer, Package, MessageSquare, MapPin, Building2, 
@@ -11,13 +11,13 @@ import {
 } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { api } from '@/lib/api';
-import type { CartItem } from '@/lib/api'; // ✅ 引入型別
+// 引入 CartItem 型別 (注意：我們在 api.ts 把它設為 any，這裡為了方便使用 as any)
+import type { CartItem } from '@/lib/api'; 
 import Modal from '@/components/Modal'; 
 
 const CLOUDINARY_CLOUD_NAME = 'dnibj8za6'; 
 const CLOUDINARY_PRESET = 'yasou70731';  
 
-// 定義 User 型別 (簡單版)
 interface UserProfile {
   dealerProfile?: {
     address?: string;
@@ -232,7 +232,6 @@ export default function CartPage() {
           
           {/* 左側：商品列表 */}
           <div className="lg:col-span-2 space-y-6">
-            {/* ✅ 使用 CartItem 型別 */}
             {items.map((item: CartItem) => (
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               <div key={(item as any).internalId} className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm flex flex-col sm:flex-row gap-6 relative group">
@@ -244,10 +243,11 @@ export default function CartPage() {
                   <Trash2 className="w-5 h-5" />
                 </button>
                 <div className="w-24 h-24 bg-gray-100 rounded-xl shrink-0 overflow-hidden relative">
-                   {/* ✅ 改用 Next Image */}
+                   {/* ✅ 修正 1: 使用 item.productName 而不是 item.product.name */}
                    <Image 
                      src="https://images.unsplash.com/photo-1600607686527-6fb886090705?auto=format&fit=crop&q=80&w=200" 
-                     alt={item.product.name} 
+                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                     alt={(item as any).productName || 'product'} 
                      fill
                      className="object-cover"
                      sizes="96px"
@@ -255,7 +255,9 @@ export default function CartPage() {
                 </div>
                 <div className="flex-1">
                   <div className="flex flex-wrap items-center gap-2 mb-1">
-                    <h3 className="text-lg font-bold text-gray-900">{item.product.name}</h3>
+                    {/* ✅ 修正 2: 使用 item.productName 而不是 item.product.name */}
+                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                    <h3 className="text-lg font-bold text-gray-900">{(item as any).productName}</h3>
                     {item.serviceType === 'material' ? (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-gray-100 text-gray-700 border border-gray-200"><Package className="w-3 h-3" /> 純材料</span>
                     ) : (
