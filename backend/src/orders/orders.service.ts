@@ -1,9 +1,10 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Like } from 'typeorm';
+import { Repository, Like, DataSource } from 'typeorm';
 import { Order, OrderStatus } from './entities/order.entity';
 import { OrderItem } from './entities/order-item.entity';
 import { User } from '../users/entities/user.entity';
+import { DealerProfile } from '../users/entities/dealer-profile.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { SiteConfigService } from '../site-config/site-config.service'; 
@@ -16,7 +17,8 @@ export class OrdersService {
     @InjectRepository(User)
     private usersRepository: Repository<User>,
     private notificationsService: NotificationsService,
-    private siteConfigService: SiteConfigService, 
+    private siteConfigService: SiteConfigService,
+    private dataSource: DataSource, // ✨ 注入 DataSource 以使用 Transaction
   ) {}
 
   // 1. 查詢所有訂單 (管理員用)
@@ -48,112 +50,154 @@ export class OrdersService {
     return order;
   }
 
-  // 4. 建立訂單 (含月刷制流水號邏輯)
+  // 4. 建立訂單 (含扣款邏輯與月刷制流水號)
   async create(createOrderDto: CreateOrderDto, user: User) {
-    const order = new Order();
-    order.user = user;
-    order.projectName = createOrderDto.projectName;
-    
-    // 收貨資訊
-    order.shippingAddress = createOrderDto.shippingAddress || '';
-    order.siteContactPerson = createOrderDto.siteContactPerson || '';
-    order.siteContactPhone = createOrderDto.siteContactPhone || '';
-    
-    // 附件
-    order.attachments = createOrderDto.attachments || [];
+    // 0. 預先計算總金額
+    const totalAmount = createOrderDto.items.reduce((sum, item) => sum + Number(item.subtotal), 0);
 
-    order.agreedToDisclaimer = createOrderDto.agreedToDisclaimer;
-    order.customerNote = createOrderDto.customerNote;
-    
-    // ✨✨✨ 流水號生成邏輯 (月刷制) ✨✨✨
-    
-    // 1. 讀取後台設定的「重置日」
-    const rules = await this.siteConfigService.getSystemRules();
-    const resetDay = rules.settings?.order_reset_day || 1; // 預設每月 1 號重置
+    // ✨✨✨ 啟動資料庫事務 (Transaction) ✨✨✨
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    // 2. 計算當前所屬的週期 (Cycle)
-    const today = new Date();
-    let cycleYear = today.getFullYear();
-    let cycleMonth = today.getMonth(); // 0-11 (注意：0是1月)
+    try {
+      // 1. 檢查餘額並扣款 (使用悲觀鎖防止並發問題)
+      // 注意：必須使用 queryRunner.manager 來操作，才能在同一個事務中
+      const dealerProfile = await queryRunner.manager.findOne(DealerProfile, {
+        where: { user: { id: user.id } },
+        lock: { mode: 'pessimistic_write' } // 鎖定這筆資料直到事務結束
+      });
 
-    // 如果今天還沒到重置日 (例如設定 25 號，今天是 20 號)，則歸屬到「上個月」的帳務週期
-    if (today.getDate() < resetDay) {
-      cycleMonth -= 1;
-    }
+      if (!dealerProfile) {
+        throw new BadRequestException('找不到經銷商資料，無法進行扣款');
+      }
 
-    // 處理跨年 (例如 1月往前推變成去年的 12月)
-    if (cycleMonth < 0) {
-      cycleMonth = 11;
-      cycleYear -= 1;
-    }
+      const currentBalance = Number(dealerProfile.walletBalance);
+      
+      // 檢查餘額是否足夠
+      if (currentBalance < totalAmount) {
+        throw new BadRequestException(`餘額不足！(訂單金額 $${totalAmount.toLocaleString()}，目前餘額 $${currentBalance.toLocaleString()})`);
+      }
 
-    // 3. 生成前綴字串：ORD-YYYYMM- (例如 ORD-202511-)
-    const dateStr = `${cycleYear}${String(cycleMonth + 1).padStart(2, '0')}`; 
-    const prefix = `ORD-${dateStr}`;
+      // 執行扣款
+      dealerProfile.walletBalance = currentBalance - totalAmount;
+      await queryRunner.manager.save(dealerProfile);
 
-    // 4. 找出該週期的最後一筆訂單，以決定序號
-    const lastOrder = await this.ordersRepository.findOne({
-      where: { orderNumber: Like(`${prefix}%`) }, 
-      order: { orderNumber: 'DESC' },
-    });
+      // 2. 準備訂單物件
+      const order = new Order();
+      order.user = user;
+      order.projectName = createOrderDto.projectName;
+      
+      // 收貨資訊
+      order.shippingAddress = createOrderDto.shippingAddress || '';
+      order.siteContactPerson = createOrderDto.siteContactPerson || '';
+      order.siteContactPhone = createOrderDto.siteContactPhone || '';
+      
+      // 附件
+      order.attachments = createOrderDto.attachments || [];
 
-    let sequence = 1;
-    if (lastOrder) {
-      const parts = lastOrder.orderNumber.split('-');
-      // 確保格式正確 (ORD-YYYYMM-XXX)
-      if (parts.length === 3) {
-        const lastSeq = parseInt(parts[2], 10);
-        if (!isNaN(lastSeq)) {
-          sequence = lastSeq + 1;
+      order.agreedToDisclaimer = createOrderDto.agreedToDisclaimer;
+      order.customerNote = createOrderDto.customerNote;
+      order.totalAmount = totalAmount; // 寫入總金額
+      
+      // 3. 流水號生成邏輯 (月刷制)
+      
+      // 讀取後台設定的「重置日」
+      const rules = await this.siteConfigService.getSystemRules();
+      const resetDay = rules.settings?.order_reset_day || 1; // 預設每月 1 號重置
+
+      // 計算當前所屬的週期 (Cycle)
+      const today = new Date();
+      let cycleYear = today.getFullYear();
+      let cycleMonth = today.getMonth(); // 0-11
+
+      // 如果今天還沒到重置日，則歸屬到「上個月」的帳務週期
+      if (today.getDate() < resetDay) {
+        cycleMonth -= 1;
+      }
+
+      // 處理跨年
+      if (cycleMonth < 0) {
+        cycleMonth = 11;
+        cycleYear -= 1;
+      }
+
+      // 生成前綴字串：ORD-YYYYMM-
+      const dateStr = `${cycleYear}${String(cycleMonth + 1).padStart(2, '0')}`; 
+      const prefix = `ORD-${dateStr}`;
+
+      // 找出該週期的最後一筆訂單 (使用 queryRunner 查詢以確保一致性)
+      const lastOrder = await queryRunner.manager.findOne(Order, {
+        where: { orderNumber: Like(`${prefix}%`) }, 
+        order: { orderNumber: 'DESC' },
+      });
+
+      let sequence = 1;
+      if (lastOrder) {
+        const parts = lastOrder.orderNumber.split('-');
+        if (parts.length === 3) {
+          const lastSeq = parseInt(parts[2], 10);
+          if (!isNaN(lastSeq)) {
+            sequence = lastSeq + 1;
+          }
         }
       }
+
+      // 補零
+      const sequenceStr = sequence.toString().padStart(3, '0'); 
+      order.orderNumber = `${prefix}-${sequenceStr}`;
+      order.status = OrderStatus.PENDING;
+
+      // 建立訂單項目
+      order.items = createOrderDto.items.map(itemDto => {
+        const item = new OrderItem();
+        item.product = { id: itemDto.productId } as any; 
+        item.serviceType = itemDto.serviceType as any; 
+        item.widthMatrix = itemDto.widthMatrix;
+        item.heightData = itemDto.heightData;
+        item.isCeilingMounted = itemDto.isCeilingMounted;
+        item.siteConditions = itemDto.siteConditions;
+        item.colorName = itemDto.colorName;
+        item.materialName = itemDto.materialName;
+        item.handleName = itemDto.handleName || '';
+        item.openingDirection = itemDto.openingDirection;
+        item.hasThreshold = itemDto.hasThreshold;
+        item.quantity = itemDto.quantity;
+        item.subtotal = itemDto.subtotal;
+        item.priceSnapshot = itemDto.priceSnapshot;
+        return item;
+      });
+
+      // 4. 儲存訂單 (使用 queryRunner)
+      const savedOrder = await queryRunner.manager.save(order);
+
+      // ✨✨✨ 提交事務 (確認扣款與訂單建立) ✨✨✨
+      await queryRunner.commitTransaction();
+
+      // 5. 發送通知 (成功後才發送)
+      // 這裡使用 dealerProfile 的 companyName，因為它是最新的
+      const dealerName = dealerProfile.companyName || user.email;
+      const firstItemName = savedOrder.items[0]?.product?.name || '客製化門扇'; // 注意：這裡可能因為是新建的物件而拿不到 product name，除非前端有傳或重新查詢。暫時保留原樣。
+      const itemCount = savedOrder.items.length;
+      const attachmentHint = order.attachments.length > 0 ? ` (含 ${order.attachments.length} 個附件)` : '';
+      
+      try {
+          const msg = `🔥 新訂單通知${attachmentHint}！\n單號：${savedOrder.orderNumber}\n客戶：${dealerName}\n地點：${order.shippingAddress}\n金額：$${totalAmount.toLocaleString()}\n內容：${firstItemName} 等 ${itemCount} 件`;
+          this.notificationsService.sendLineNotify(msg).catch(err => console.log('Line 通知略過'));
+      } catch (e) {
+          // 忽略通知錯誤
+      }
+
+      return savedOrder;
+
+    } catch (err) {
+      // 發生錯誤 (如餘額不足)，回滾所有變更
+      await queryRunner.rollbackTransaction();
+      throw err;
+    } finally {
+      // 釋放資源
+      await queryRunner.release();
     }
-
-    // 補零 (001, 002...)
-    const sequenceStr = sequence.toString().padStart(3, '0'); 
-    order.orderNumber = `${prefix}-${sequenceStr}`;
-    order.status = OrderStatus.PENDING;
-
-    // 建立訂單項目
-    order.items = createOrderDto.items.map(itemDto => {
-      const item = new OrderItem();
-      item.product = { id: itemDto.productId } as any; 
-      item.serviceType = itemDto.serviceType as any; 
-      item.widthMatrix = itemDto.widthMatrix;
-      item.heightData = itemDto.heightData;
-      item.isCeilingMounted = itemDto.isCeilingMounted;
-      item.siteConditions = itemDto.siteConditions;
-      item.colorName = itemDto.colorName;
-      item.materialName = itemDto.materialName;
-      // ✨✨✨ 寫入把手名稱 ✨✨✨
-      item.handleName = itemDto.handleName || '';
-      item.openingDirection = itemDto.openingDirection;
-      item.hasThreshold = itemDto.hasThreshold;
-      item.quantity = itemDto.quantity;
-      item.subtotal = itemDto.subtotal;
-      item.priceSnapshot = itemDto.priceSnapshot;
-      return item;
-    });
-
-    // 計算總金額
-    order.totalAmount = order.items.reduce((sum, item) => sum + Number(item.subtotal), 0);
-
-    const savedOrder = await this.ordersRepository.save(order);
-
-    // 發送通知
-    const dealerName = user.dealerProfile?.companyName || user.email;
-    const firstItemName = savedOrder.items[0]?.product?.name || '客製化門扇'; 
-    const itemCount = savedOrder.items.length;
-    const attachmentHint = order.attachments.length > 0 ? ` (含 ${order.attachments.length} 個附件)` : '';
-    
-    try {
-        const msg = `🔥 新訂單通知${attachmentHint}！\n單號：${savedOrder.orderNumber}\n客戶：${dealerName}\n地點：${order.shippingAddress}\n內容：${firstItemName} 等 ${itemCount} 件`;
-        this.notificationsService.sendLineNotify(msg).catch(err => console.log('Line 通知略過'));
-    } catch (e) {
-        // 忽略通知錯誤
-    }
-
-    return savedOrder;
   }
 
   // 5. 更新狀態
