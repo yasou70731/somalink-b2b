@@ -15,12 +15,12 @@ export class NotificationsService {
       
       console.log(`📧 初始化 Gmail 郵件服務...`);
       console.log(`   - 使用者: ${user}`);
-      console.log(`   - 模式: Nodemailer Service 'gmail' (自動配置)`);
+      console.log(`   - 模式: Service 'gmail' (自動配置) | IPv4 強制`);
 
       this.transporter = nodemailer.createTransport({
-        // ✨✨✨ 關鍵修改：不再手動設定 host/port ✨✨✨
-        // 使用內建的 'gmail' 服務設定，它會自動處理 TLS/SSL 和端口選擇
-        // 這通常比手動設定更能適應雲端環境
+        // ✨✨✨ 最後手段：使用 service: 'gmail' ✨✨✨
+        // 這會自動載入 Nodemailer 內建針對 Gmail 的最佳設定 (包含 Port 和加密方式)
+        // 這是最單純的設定方式，能排除所有手動設定錯誤
         service: 'gmail',
         
         auth: {
@@ -28,11 +28,20 @@ export class NotificationsService {
           pass: pass,
         },
         
-        // 保持強制 IPv4 (這點對 Render 很重要)
+        // 保持強制 IPv4 (這點對 Render 非常重要，不能拿掉)
         family: 4, 
         
-        // 開啟除錯，若失敗方便查看
-        debug: true,
+        // 寬鬆的 TLS 憑證檢查
+        tls: {
+          rejectUnauthorized: false
+        },
+
+        // 設定 20 秒逾時，不要空等兩分鐘
+        connectionTimeout: 20000, 
+        greetingTimeout: 20000,
+        socketTimeout: 20000,
+
+        debug: true, 
         logger: true
       } as any);
       
@@ -70,7 +79,6 @@ export class NotificationsService {
         console.error(`- Code: ${(error as any).code}`);
         console.error(`- Command: ${(error as any).command}`);
         console.error(`- Message: ${error.message}`);
-        // console.error(`- Stack: ${error.stack}`); // 暫時隱藏 Stack 讓 Log 乾淨點
       } else {
         console.error(error);
       }
