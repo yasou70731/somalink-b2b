@@ -7,7 +7,7 @@ export class NotificationsService {
   private transporter;
 
   constructor() {
-    // 1. 取得帳號 (同時相容 SMTP_USER 和 EMAIL_USER 兩種命名)
+    // 1. 取得帳號
     const user = process.env.SMTP_USER || process.env.EMAIL_USER;
     const pass = process.env.SMTP_PASS || process.env.EMAIL_PASS;
 
@@ -16,30 +16,34 @@ export class NotificationsService {
       
       console.log(`📧 初始化 Gmail 郵件服務...`);
       console.log(`   - 使用者: ${user}`);
-      console.log(`   - 模式: Port 465 (SSL) | 強制 IPv4`);
+      // ✨ 改回 Port 587，因為您之前的測試證明 587 網路是通的 (只報 401)，而 465 會 Timeout
+      console.log(`   - 模式: Port 587 (STARTTLS) | 強制 IPv4`);
 
       this.transporter = nodemailer.createTransport({
         host: 'smtp.gmail.com',  
-        port: 465,               
-        secure: true,            
+        port: 587,               // ✨ 修正：改用 587
+        secure: false,           // ✨ 修正：Port 587 必須設為 false (它會使用 STARTTLS 升級加密)
         auth: {
           user: user,
           pass: pass,
         },
-        // ✨✨✨ 關鍵修正：強制使用 IPv4 ✨✨✨
-        // Render 環境下，Node.js 預設跑 IPv6 容易導致連線 Gmail 超時
+        // ✨ 強制使用 IPv4 避免 Render 的 IPv6 連線問題
         family: 4, 
         
-        // 額外設定：忽略某些憑證問題，增加連線成功率
+        // 寬鬆的 TLS 設定，避免憑證錯誤
         tls: {
           rejectUnauthorized: false 
         },
 
         // 延長超時設定
-        connectionTimeout: 30000, 
-        greetingTimeout: 30000,
-        socketTimeout: 30000
-      } as any); // ✨ 修正：加入 'as any' 來繞過 TypeScript 的型別檢查錯誤
+        connectionTimeout: 60000, 
+        greetingTimeout: 60000,
+        socketTimeout: 60000,
+
+        // 開啟除錯模式，若失敗可以看到更多 SMTP 互動細節
+        debug: true,
+        logger: true
+      } as any);
       
     } else {
       console.warn('⚠️ [警告] 未偵測到 SMTP_USER 或 SMTP_PASS，郵件功能將僅顯示 Log');
@@ -77,6 +81,7 @@ export class NotificationsService {
         console.error(`- Code: ${(error as any).code}`);
         console.error(`- Command: ${(error as any).command}`);
         console.error(`- Message: ${error.message}`);
+        console.error(`- Stack: ${error.stack}`);
       } else {
         console.error(error);
       }
