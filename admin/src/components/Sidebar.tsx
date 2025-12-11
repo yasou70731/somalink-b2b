@@ -33,7 +33,7 @@ export default function Sidebar() {
           className="flex items-center px-3 py-3 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors group"
         >
           <LayoutDashboard className="w-5 h-5 mr-3 group-hover:text-blue-400 transition-colors" />
-          订單戰情室
+          訂單戰情室
         </Link>
 
         <Link 
