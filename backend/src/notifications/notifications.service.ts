@@ -11,36 +11,27 @@ export class NotificationsService {
     const user = process.env.SMTP_USER || process.env.EMAIL_USER;
     const pass = process.env.SMTP_PASS || process.env.EMAIL_PASS;
 
-    // 只有在設定了帳號時才啟用
     if (user && pass) {
       
       console.log(`📧 初始化 Gmail 郵件服務...`);
       console.log(`   - 使用者: ${user}`);
-      // ✨ 改回 Port 587，因為您之前的測試證明 587 網路是通的 (只報 401)，而 465 會 Timeout
-      console.log(`   - 模式: Port 587 (STARTTLS) | 強制 IPv4`);
+      console.log(`   - 模式: Nodemailer Service 'gmail' (自動配置)`);
 
       this.transporter = nodemailer.createTransport({
-        host: 'smtp.gmail.com',  
-        port: 587,               // ✨ 修正：改用 587
-        secure: false,           // ✨ 修正：Port 587 必須設為 false (它會使用 STARTTLS 升級加密)
+        // ✨✨✨ 關鍵修改：不再手動設定 host/port ✨✨✨
+        // 使用內建的 'gmail' 服務設定，它會自動處理 TLS/SSL 和端口選擇
+        // 這通常比手動設定更能適應雲端環境
+        service: 'gmail',
+        
         auth: {
           user: user,
           pass: pass,
         },
-        // ✨ 強制使用 IPv4 避免 Render 的 IPv6 連線問題
+        
+        // 保持強制 IPv4 (這點對 Render 很重要)
         family: 4, 
         
-        // 寬鬆的 TLS 設定，避免憑證錯誤
-        tls: {
-          rejectUnauthorized: false 
-        },
-
-        // 延長超時設定
-        connectionTimeout: 60000, 
-        greetingTimeout: 60000,
-        socketTimeout: 60000,
-
-        // 開啟除錯模式，若失敗可以看到更多 SMTP 互動細節
+        // 開啟除錯，若失敗方便查看
         debug: true,
         logger: true
       } as any);
@@ -56,7 +47,6 @@ export class NotificationsService {
       console.log('=================================================');
       console.log('📧 [模擬寄信] (未設定 SMTP 帳密)');
       console.log(`收件人: ${to}`);
-      console.log(`主旨: ${subject}`);
       console.log('=================================================');
       return true;
     }
@@ -76,12 +66,11 @@ export class NotificationsService {
       return true;
     } catch (error) {
       console.error('❌ 郵件發送失敗 (Error Details):');
-      // 印出完整的錯誤物件以便除錯
       if (error instanceof Error) {
         console.error(`- Code: ${(error as any).code}`);
         console.error(`- Command: ${(error as any).command}`);
         console.error(`- Message: ${error.message}`);
-        console.error(`- Stack: ${error.stack}`);
+        // console.error(`- Stack: ${error.stack}`); // 暫時隱藏 Stack 讓 Log 乾淨點
       } else {
         console.error(error);
       }
@@ -89,13 +78,10 @@ export class NotificationsService {
     }
   }
 
-  // 2. 發送 Line Notify (保持不變)
+  // 2. 發送 Line Notify
   async sendLineNotify(message: string) {
     const token = process.env.LINE_NOTIFY_TOKEN;
-    
-    if (!token) {
-        return true;
-    }
+    if (!token) return true;
 
     try {
       await axios.post(
