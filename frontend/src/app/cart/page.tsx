@@ -7,25 +7,33 @@ import Image from 'next/image';
 import { 
   Trash2, ArrowRight, Loader2, ShoppingBag, AlertCircle, 
   Hammer, Package, MessageSquare, MapPin, Building2, 
-  User, Phone, Copy, UploadCloud, FileText, X, Printer, Wallet // ✨ 新增 Wallet 圖示
+  User, Phone, Copy, UploadCloud, FileText, X, Printer, Wallet 
 } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { api } from '@/lib/api';
-// 引入 CartItem 型別 (注意：我們在 api.ts 把它設為 any，這裡為了方便使用 as any)
+// 引入 CartItem 型別
 import type { CartItem } from '@/lib/api'; 
 import Modal from '@/components/Modal'; 
 
 const CLOUDINARY_CLOUD_NAME = 'dnibj8za6'; 
 const CLOUDINARY_PRESET = 'yasou70731';  
 
-// ✨ 修正：補齊 UserProfile 的欄位定義，包含等級與餘額
+// 定義 User 型別
 interface UserProfile {
   dealerProfile?: {
     address?: string;
     contactPerson?: string;
     phone?: string;
-    level?: string;         // ✨ 新增等級
-    walletBalance?: number; // ✨ 新增餘額
+    level?: string;         
+    walletBalance?: number; 
+  };
+}
+
+// 定義錯誤型別
+interface ApiError {
+  response?: {
+    status?: number;
+    data?: { message?: string };
   };
 }
 
@@ -71,6 +79,10 @@ export default function CartPage() {
 
   const [agreed, setAgreed] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // 判斷是否顯示錢包 (僅限 A/B 級會員)
+  const showWallet = currentUser?.dealerProfile && 
+    (currentUser.dealerProfile.level === 'A' || currentUser.dealerProfile.level === 'B');
 
   const showAlert = (title: string, message: string, type: 'error' | 'success' | 'info' | 'warning' = 'error', redirect = '') => {
     setModalConfig({ isOpen: true, title, message, type, redirect });
@@ -159,8 +171,8 @@ export default function CartPage() {
         customerNote,
         attachments,
         agreedToDisclaimer: agreed,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        items: items.map((item: any) => ({
+        // ✅ 修正：移除多餘的 any 和 eslint-disable
+        items: items.map((item) => ({
           productId: item.productId,
           serviceType: item.serviceType,
           widthMatrix: item.widthMatrix,
@@ -183,10 +195,11 @@ export default function CartPage() {
       
       showAlert('訂單已送出！', '您的訂單已成功建立，請至「歷史訂單」查看進度。', 'success', '/orders');
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (error: any) {
-      console.error(error);
-      if (error.response?.status === 401) {
+    } catch (error) {
+      // ✅ 修正：標準錯誤處理
+      const err = error as ApiError;
+      console.error(err);
+      if (err.response?.status === 401) {
         showAlert('權限錯誤', '請先登入會員後再試。', 'error', '/login');
       } else {
         showAlert('結帳失敗', '系統發生錯誤，請聯繫管理員。', 'error');
@@ -215,7 +228,7 @@ export default function CartPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12">
+    <div className="min-h-screen bg-gray-50 py-12 relative">
       <Modal 
         isOpen={modalConfig.isOpen}
         title={modalConfig.title}
@@ -228,6 +241,21 @@ export default function CartPage() {
         confirmText="確定"
       />
 
+      {/* 懸浮錢包小工具 (固定在左下角，僅 A/B 級顯示) */}
+      {showWallet && (
+        <div className="fixed bottom-6 left-6 z-40 bg-gray-900 text-white px-5 py-3 rounded-full shadow-2xl border border-gray-700 flex items-center gap-3 animate-in slide-in-from-bottom-5 hover:scale-105 transition-transform cursor-default">
+          <div className="bg-blue-600 p-1.5 rounded-full">
+            <Wallet className="w-4 h-4 text-white" />
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider leading-none">Wallet Balance</span>
+            <span className="text-sm font-bold font-mono">
+              ${Number(currentUser?.dealerProfile?.walletBalance || 0).toLocaleString()}
+            </span>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-8">確認訂單內容</h1>
 
@@ -236,21 +264,18 @@ export default function CartPage() {
           {/* 左側：商品列表 */}
           <div className="lg:col-span-2 space-y-6">
             {items.map((item: CartItem) => (
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              <div key={(item as any).internalId} className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm flex flex-col sm:flex-row gap-6 relative group">
+              // ✅ 修正：移除多餘的 any 強制轉型，CartItem 已經包含了所需欄位
+              <div key={item.internalId} className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm flex flex-col sm:flex-row gap-6 relative group">
                 <button 
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  onClick={() => removeFromCart((item as any).internalId)}
+                  onClick={() => removeFromCart(item.internalId)}
                   className="absolute top-4 right-4 p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
                 >
                   <Trash2 className="w-5 h-5" />
                 </button>
                 <div className="w-24 h-24 bg-gray-100 rounded-xl shrink-0 overflow-hidden relative">
-                   {/* ✅ 改用 Next Image */}
                    <Image 
                      src="https://images.unsplash.com/photo-1600607686527-6fb886090705?auto=format&fit=crop&q=80&w=200" 
-                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                     alt={(item as any).productName || 'product'} 
+                     alt={item.productName || 'product'} 
                      fill
                      className="object-cover"
                      sizes="96px"
@@ -258,9 +283,7 @@ export default function CartPage() {
                 </div>
                 <div className="flex-1">
                   <div className="flex flex-wrap items-center gap-2 mb-1">
-                    {/* ✅ 修正 2: 使用 item.productName 而不是 item.product.name */}
-                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                    <h3 className="text-lg font-bold text-gray-900">{(item as any).productName}</h3>
+                    <h3 className="text-lg font-bold text-gray-900">{item.productName}</h3>
                     {item.serviceType === 'material' ? (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-gray-100 text-gray-700 border border-gray-200"><Package className="w-3 h-3" /> 純材料</span>
                     ) : (
@@ -269,9 +292,8 @@ export default function CartPage() {
                   </div>
                   <div className="mt-2 space-y-1 text-sm text-gray-600">
                     <p><span className="font-medium">規格：</span>{item.colorName} / {item.materialName} / {item.handleName || '無把手'} / {item.openingDirection}</p>
-                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                    {/* ✅ 修正：安全讀取 JsonObject 類型的欄位 */}
                     <p><span className="font-medium">尺寸：</span>W {item.widthMatrix.mid}cm x H {(item.heightData as any).singleValue || (item.heightData as any).mid || 'N/A'}cm {item.isCeilingMounted && <span className="ml-2 px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">封頂</span>}</p>
-                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                     {(item.siteConditions as any)?.floor && <p className="text-orange-600 text-xs flex items-center gap-1"><AlertCircle className="w-3 h-3" /> 地面水平誤差: {(item.siteConditions as any).floor.diff}cm</p>}
                   </div>
                   <div className="mt-4 flex items-center justify-between">
@@ -291,14 +313,13 @@ export default function CartPage() {
             <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm sticky top-24">
               <h2 className="text-xl font-bold text-gray-900 mb-6">訂單摘要</h2>
               
-              {/* ✨✨✨ 新增：錢包餘額顯示 (僅 A/B 級會員顯示) ✨✨✨ */}
-              {currentUser?.dealerProfile && (currentUser.dealerProfile.level === 'A' || currentUser.dealerProfile.level === 'B') && (
+              {showWallet && (
                 <div className="mb-6 bg-blue-50 p-4 rounded-xl border border-blue-100 flex justify-between items-center">
                   <span className="text-sm font-bold text-blue-800 flex items-center gap-2">
                     <Wallet className="w-4 h-4" /> 錢包餘額
                   </span>
                   <span className="text-lg font-bold text-blue-700">
-                    ${Number(currentUser.dealerProfile.walletBalance || 0).toLocaleString()}
+                    ${Number(currentUser?.dealerProfile?.walletBalance || 0).toLocaleString()}
                   </span>
                 </div>
               )}
