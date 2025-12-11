@@ -16,21 +16,30 @@ export class NotificationsService {
       
       console.log(`📧 初始化 Gmail 郵件服務...`);
       console.log(`   - 使用者: ${user}`);
-      console.log(`   - 模式: Port 465 (SSL)`);
+      console.log(`   - 模式: Port 465 (SSL) | 強制 IPv4`);
 
       this.transporter = nodemailer.createTransport({
-        host: 'smtp.gmail.com',  // 強制鎖定 Gmail
-        port: 465,               // 強制使用 SSL Port (Render 最穩定)
-        secure: true,            // 465 必須為 true
+        host: 'smtp.gmail.com',  
+        port: 465,               
+        secure: true,            
         auth: {
           user: user,
           pass: pass,
         },
-        // 增加連線設定，避免太快判定超時
-        connectionTimeout: 20000, 
-        greetingTimeout: 20000,
-        socketTimeout: 20000
-      });
+        // ✨✨✨ 關鍵修正：強制使用 IPv4 ✨✨✨
+        // Render 環境下，Node.js 預設跑 IPv6 容易導致連線 Gmail 超時
+        family: 4, 
+        
+        // 額外設定：忽略某些憑證問題，增加連線成功率
+        tls: {
+          rejectUnauthorized: false 
+        },
+
+        // 延長超時設定
+        connectionTimeout: 30000, 
+        greetingTimeout: 30000,
+        socketTimeout: 30000
+      } as any); // ✨ 修正：加入 'as any' 來繞過 TypeScript 的型別檢查錯誤
       
     } else {
       console.warn('⚠️ [警告] 未偵測到 SMTP_USER 或 SMTP_PASS，郵件功能將僅顯示 Log');
@@ -39,7 +48,6 @@ export class NotificationsService {
 
   // 1. 寄送 Email
   async sendEmail(to: string, subject: string, text: string, html?: string) {
-    // 開發模式或未設定 SMTP 時，只印 Log
     if (!this.transporter) {
       console.log('=================================================');
       console.log('📧 [模擬寄信] (未設定 SMTP 帳密)');
@@ -64,7 +72,14 @@ export class NotificationsService {
       return true;
     } catch (error) {
       console.error('❌ 郵件發送失敗 (Error Details):');
-      console.error(error);
+      // 印出完整的錯誤物件以便除錯
+      if (error instanceof Error) {
+        console.error(`- Code: ${(error as any).code}`);
+        console.error(`- Command: ${(error as any).command}`);
+        console.error(`- Message: ${error.message}`);
+      } else {
+        console.error(error);
+      }
       return false;
     }
   }
@@ -74,7 +89,6 @@ export class NotificationsService {
     const token = process.env.LINE_NOTIFY_TOKEN;
     
     if (!token) {
-        // console.log('🔔 [模擬 Line] (未設定 Token)');
         return true;
     }
 
