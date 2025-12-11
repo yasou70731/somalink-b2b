@@ -11,14 +11,12 @@ import {
 } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { api } from '@/lib/api';
-// 引入 CartItem 型別
 import type { CartItem } from '@/lib/api'; 
 import Modal from '@/components/Modal'; 
 
 const CLOUDINARY_CLOUD_NAME = 'dnibj8za6'; 
 const CLOUDINARY_PRESET = 'yasou70731';  
 
-// 定義 User 型別
 interface UserProfile {
   dealerProfile?: {
     address?: string;
@@ -29,7 +27,6 @@ interface UserProfile {
   };
 }
 
-// 定義錯誤型別
 interface ApiError {
   response?: {
     status?: number;
@@ -53,6 +50,33 @@ export default function CartPage() {
     redirect: '' 
   });
 
+  // ✨✨✨ 1. 定義一個函式來同步最新資料 ✨✨✨
+  const syncUserProfile = async () => {
+    try {
+      // 偷偷去後端抓最新的個人資料
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const latestUser: any = await api.get('/users/profile');
+      
+      if (latestUser && latestUser.dealerProfile) {
+        console.log('已同步最新會員資料:', latestUser.dealerProfile.level);
+        
+        // 1. 更新 React 狀態 (讓畫面馬上變)
+        setCurrentUser(latestUser);
+        
+        // 2. 更新 LocalStorage (讓下次進來也是新的)
+        if (localStorage.getItem('somalink_user')) {
+          localStorage.setItem('somalink_user', JSON.stringify(latestUser));
+        }
+        if (sessionStorage.getItem('somalink_user')) {
+          sessionStorage.setItem('somalink_user', JSON.stringify(latestUser));
+        }
+      }
+    } catch (e) {
+      console.error('背景同步會員資料失敗', e);
+      // 失敗就算了，維持舊資料，不影響使用
+    }
+  };
+
   useEffect(() => {
     const token = localStorage.getItem('somalink_token') || sessionStorage.getItem('somalink_token');
     if (!token) {
@@ -60,12 +84,17 @@ export default function CartPage() {
       return;
     }
     setAuthChecking(false);
-
     setMounted(true);
+
+    // 1. 先讀取舊的資料 (為了速度，先顯示舊的)
     const stored = localStorage.getItem('somalink_user') || sessionStorage.getItem('somalink_user');
     if (stored) {
       try { setCurrentUser(JSON.parse(stored)); } catch { /* ignore error */ }
     }
+
+    // 2. ✨✨✨ 馬上發動背景同步 (這會去抓最新的等級和餘額) ✨✨✨
+    syncUserProfile();
+
   }, [router]);
 
   const [projectName, setProjectName] = useState('');
@@ -81,6 +110,7 @@ export default function CartPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // 判斷是否顯示錢包 (僅限 A/B 級會員)
+  // 因為 syncUserProfile 會更新 currentUser，所以這裡也會自動重新判斷
   const showWallet = currentUser?.dealerProfile && 
     (currentUser.dealerProfile.level === 'A' || currentUser.dealerProfile.level === 'B');
 
@@ -171,7 +201,6 @@ export default function CartPage() {
         customerNote,
         attachments,
         agreedToDisclaimer: agreed,
-        // ✅ 修正：移除多餘的 any 和 eslint-disable
         items: items.map((item) => ({
           productId: item.productId,
           serviceType: item.serviceType,
@@ -193,16 +222,18 @@ export default function CartPage() {
       await api.post('/orders', payload);
       clearCart();
       
-      showAlert('訂單已送出！', '您的訂單已成功建立，請至「歷史訂單」查看進度。', 'success', '/orders');
+      // 送出訂單後，再次同步一次 (確保餘額是最新的)
+      await syncUserProfile();
+
+      showAlert('訂單已送出！', '您的訂單已成功建立，系統已自動扣除錢包餘額。', 'success', '/orders');
 
     } catch (error) {
-      // ✅ 修正：標準錯誤處理
       const err = error as ApiError;
       console.error(err);
       if (err.response?.status === 401) {
         showAlert('權限錯誤', '請先登入會員後再試。', 'error', '/login');
       } else {
-        showAlert('結帳失敗', '系統發生錯誤，請聯繫管理員。', 'error');
+        showAlert('結帳失敗', `系統發生錯誤：${err.response?.data?.message || '請聯繫管理員'}`, 'error');
       }
     } finally {
       setIsSubmitting(false);
@@ -264,7 +295,6 @@ export default function CartPage() {
           {/* 左側：商品列表 */}
           <div className="lg:col-span-2 space-y-6">
             {items.map((item: CartItem) => (
-              // ✅ 修正：移除多餘的 any 強制轉型，CartItem 已經包含了所需欄位
               <div key={item.internalId} className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm flex flex-col sm:flex-row gap-6 relative group">
                 <button 
                   onClick={() => removeFromCart(item.internalId)}
@@ -292,7 +322,6 @@ export default function CartPage() {
                   </div>
                   <div className="mt-2 space-y-1 text-sm text-gray-600">
                     <p><span className="font-medium">規格：</span>{item.colorName} / {item.materialName} / {item.handleName || '無把手'} / {item.openingDirection}</p>
-                    {/* ✅ 修正：安全讀取 JsonObject 類型的欄位 */}
                     <p><span className="font-medium">尺寸：</span>W {item.widthMatrix.mid}cm x H {(item.heightData as any).singleValue || (item.heightData as any).mid || 'N/A'}cm {item.isCeilingMounted && <span className="ml-2 px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">封頂</span>}</p>
                     {(item.siteConditions as any)?.floor && <p className="text-orange-600 text-xs flex items-center gap-1"><AlertCircle className="w-3 h-3" /> 地面水平誤差: {(item.siteConditions as any).floor.diff}cm</p>}
                   </div>
@@ -313,6 +342,7 @@ export default function CartPage() {
             <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm sticky top-24">
               <h2 className="text-xl font-bold text-gray-900 mb-6">訂單摘要</h2>
               
+              {/* 錢包餘額顯示 (僅 A/B 級會員顯示) */}
               {showWallet && (
                 <div className="mb-6 bg-blue-50 p-4 rounded-xl border border-blue-100 flex justify-between items-center">
                   <span className="text-sm font-bold text-blue-800 flex items-center gap-2">

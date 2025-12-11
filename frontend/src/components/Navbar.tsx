@@ -7,8 +7,9 @@ import { useState, useEffect } from 'react';
 import { ShoppingCart, Search, User, LogOut, History, Wallet, UserCog, Menu, X, AlertTriangle } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import Modal from '@/components/Modal';
+// ✅ 2. 引入 API 以便進行背景同步
+import { api } from '@/lib/api';
 
-// ✅ 2. 定義 User 型別，解決 'any' 報錯
 interface UserProfile {
   email: string;
   name: string;
@@ -25,7 +26,6 @@ export default function Navbar() {
   const pathname = usePathname();
   const { cartCount, clearCart } = useCart();
   const [mounted, setMounted] = useState(false);
-  // ✅ 使用定義好的型別
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   
@@ -35,22 +35,52 @@ export default function Navbar() {
   useEffect(() => {
     setMounted(true);
     
-    const checkAuth = () => {
+    // ✅ 3. 升級版檢查邏輯：支援背景同步 (Auto Sync)
+    const checkAndSyncAuth = async () => {
+      // 先讀取本地舊資料 (讓畫面秒開)
       const storedUser = localStorage.getItem('somalink_user') || sessionStorage.getItem('somalink_user');
+      const hasToken = localStorage.getItem('somalink_token') || sessionStorage.getItem('somalink_token');
+
       if (storedUser) {
         try { 
           setUser(JSON.parse(storedUser)); 
-        // ✅ 3. 移除未使用的 (e)
+        // ✅ 修正：移除未使用的 (e)
         } catch {
           setUser(null);
         }
       } else {
         setUser(null);
+        // 如果沒有本地資料，就不用去後端問了
+        return;
+      }
+
+      // 如果有 Token，就在背景偷偷去後端抓最新的 (同步餘額/等級)
+      if (hasToken) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const latestUser: any = await api.get('/users/profile');
+          
+          if (latestUser) {
+            // 更新 State (畫面變更)
+            setUser(latestUser);
+            
+            // 更新 Storage (確保重新整理後也是新的)
+            if (localStorage.getItem('somalink_user')) {
+              localStorage.setItem('somalink_user', JSON.stringify(latestUser));
+            }
+            if (sessionStorage.getItem('somalink_user')) {
+              sessionStorage.setItem('somalink_user', JSON.stringify(latestUser));
+            }
+          }
+        } catch (err) {
+          // 靜默失敗 (例如網路不通或 Token 過期)，維持顯示舊資料即可
+          console.error('Navbar background sync failed', err);
+        }
       }
     };
 
-    checkAuth();
-  }, [pathname]);
+    checkAndSyncAuth();
+  }, [pathname]); // 只要切換頁面，就會觸發同步
 
   const handleLogout = () => {
     localStorage.removeItem('somalink_token');
@@ -232,6 +262,12 @@ export default function Navbar() {
                           )}
                         </div>
                         <p className="text-xs text-gray-500">{user.email}</p>
+                        {/* 手機版也要能看到餘額 (若符合 A/B 級) */}
+                        {(user.dealerProfile?.level === 'A' || user.dealerProfile?.level === 'B') && (
+                           <p className="text-xs text-blue-600 font-bold mt-1">
+                             餘額: ${Number(user.dealerProfile?.walletBalance || 0).toLocaleString()}
+                           </p>
+                        )}
                       </div>
                     </div>
                     <button 
