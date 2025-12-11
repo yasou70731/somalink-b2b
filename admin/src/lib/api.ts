@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-// ✨ 設定：優先使用環境變數，若無則使用您的線上後端 (根據之前的錯誤訊息)
+// ✨ 設定：優先使用環境變數，若無則使用您的線上後端
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://somalink-backend.onrender.com';
 
 // --- TypeScript 介面定義區 ---
@@ -19,12 +19,9 @@ export interface OrderItem {
   siteConditions?: any;
   colorName: string;
   materialName: string;
-  
-  // ✨✨✨ 補上這些缺少的欄位 ✨✨✨
-  handleName?: string; // 把手
+  handleName?: string;
   openingDirection: string;
   hasThreshold: boolean;
-  
   quantity: number;
   subtotal: number;
   priceSnapshot?: any;
@@ -45,13 +42,10 @@ export interface Order {
   totalAmount: number;
   createdAt: string;
   projectName: string;
-  
-  // ✨✨✨ 補上收貨與附件欄位 ✨✨✨
   shippingAddress?: string;
   siteContactPerson?: string;
   siteContactPhone?: string;
   attachments?: string[];
-
   user: {
     id: string;
     email: string;
@@ -79,12 +73,19 @@ const axiosInstance = axios.create({
 
 axiosInstance.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
-    // 【關鍵修正】這裡原本寫 'somalink_admin_token'，導致抓不到您存的 'admin_token'
+    // 【偵錯區塊 Start】
     const token = localStorage.getItem('admin_token');
     
+    // 請在 F12 Console 觀察這幾行字
+    console.log('🔍 [API Debug] 正在準備發送請求:', config.url);
+    console.log('🔍 [API Debug] 嘗試讀取 admin_token:', token ? '有抓到 Token (前10碼): ' + token.substring(0, 10) : '❌ 未抓到 Token');
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    } else {
+      console.warn('⚠️ [API Warning] 請求未包含 Token，可能會導致 401 錯誤');
     }
+    // 【偵錯區塊 End】
   }
   return config;
 });
@@ -93,8 +94,13 @@ axiosInstance.interceptors.request.use((config) => {
 
 export const api = {
   get: async (url: string) => {
-    const response = await axiosInstance.get(url);
-    return response.data;
+    try {
+      const response = await axiosInstance.get(url);
+      return response.data;
+    } catch (error) {
+      console.error('❌ [API Error] GET 請求失敗:', url, error);
+      throw error;
+    }
   },
   post: async (url: string, data: any) => {
     const response = await axiosInstance.post(url, data);
@@ -109,11 +115,9 @@ export const api = {
     return response.data;
   },
   
-  // 圖片上傳
   uploadImage: async (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
-    // 建議將此字串移至 .env，目前先保留寫死以利測試
     formData.append('upload_preset', 'yasou70731'); 
     
     const res = await axios.post(
